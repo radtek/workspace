@@ -39,12 +39,12 @@ void Server::EventAdd(int epollFd, int events, myevent_s* ev)
 
 	if(result < 0)
 	{
-		g_logs.WriteLog("Event add failed[ fd = %d ],events[ %d ]", ev->fd, events);
+		g_logs->WriteLog("Event add failed[ fd = %d ],events[ %d ]", ev->fd, events);
 	}
 	else
 	{
 #ifndef NO_DEBUG
-		g_logs.WriteLog("Event add succeed[fd=%d],op=%d,events[%0X]", ev->fd, op, events);
+		g_logs->WriteLog("Event add succeed[fd=%d],op=%d,events[%0X]", ev->fd, op, events);
 #endif
 	}
 }
@@ -74,7 +74,7 @@ void Server::AcceptConn(int fd, int events, void* arg, void* self)
 		if(errno != EAGAIN && errno != EINTR)
 		{
 		}
-		g_logs.WriteLog("%s:accept,%d",__func__, errno);
+		g_logs->WriteLog("%s:accept,%d",__func__, errno);
 		return;
 	}
 
@@ -90,25 +90,25 @@ void Server::AcceptConn(int fd, int events, void* arg, void* self)
 
 		if(i == MAX_EVENTS)
 		{
-			g_logs.WriteLog("%s:Max connection limit[%d].",__func__, MAX_EVENTS);
+			g_logs->WriteLog("%s:Max connection limit[%d].",__func__, MAX_EVENTS);
 		}
 
 		/*
 		if(fcntl(sock, F_SETFL, O_NONBLOCK) < 0)
 		{
-			g_logs.WriteLog("%s:fnctl nonblocking failed[%d].", __func__, sock);
+			g_logs->WriteLog("%s:fnctl nonblocking failed[%d].", __func__, sock);
 			break;
 		}
 		else
 		{
-			g_logs.WriteLog("Func %s:fnctl nonblocking succeed[%d].", __func__, sock);
+			g_logs->WriteLog("Func %s:fnctl nonblocking succeed[%d].", __func__, sock);
 		}
 		*/
 
 		pthis->EventSet(&pthis->m_events[i], sock, Server::RecvData, &pthis->m_events[i]);
 		pthis->EventAdd(pthis->m_epollfd, EPOLLIN, &pthis->m_events[i]);
 	}while(0);
-	g_logs.WriteLog("New client %s connected on pos %d.", inet_ntoa(clnt_addr.sin_addr), i);
+	g_logs->WriteLog("New client %s connected on pos %d.", inet_ntoa(clnt_addr.sin_addr), i);
 }
 
 void Server::RecvData(int fd, int events, void* arg, void* self)
@@ -135,7 +135,7 @@ void Server::RecvData(int fd, int events, void* arg, void* self)
 			else
 			{
 #ifndef NO_DEBUG
-				g_logs.WriteLog("Recv package error.");
+				g_logs->WriteLog("Recv package error.");
 #endif
 			}
 		}
@@ -148,14 +148,14 @@ void Server::RecvData(int fd, int events, void* arg, void* self)
 	{
 		close(ev->fd);
 #ifndef NO_DEBUG
-		g_logs.WriteLog("Client pos %d disconnected.", ev - pthis->m_events);
+		g_logs->WriteLog("Client pos %d disconnected.", ev - pthis->m_events);
 #endif
 	}
 	else
 	{
 		close(ev->fd);
 #ifndef NO_DEBUG
-		g_logs.WriteLog("Recv[fd=%d] error[%d]:%s", fd, errno, strerror(errno));
+		g_logs->WriteLog("Recv[fd=%d] error[%d]:%s", fd, errno, strerror(errno));
 #endif
 	}
 }
@@ -172,7 +172,7 @@ void Server::SendData(int fd, int events, void* arg, void* self)
 	len = send(fd, buffer, buflen, 0);
 	if(len > 0)
 	{
-		g_logs.WriteLog("返回应答消息成功.");
+		g_logs->WriteLog("返回应答消息成功.");
 		pthis->EventDel(pthis->m_epollfd, ev);
 		pthis->EventSet(ev, fd, pthis->RecvData,ev);
 		pthis->EventAdd(pthis->m_epollfd, EPOLLIN, ev);
@@ -182,7 +182,7 @@ void Server::SendData(int fd, int events, void* arg, void* self)
 		close(ev->fd);
 		pthis->EventDel(pthis->m_epollfd, ev);
 #ifndef NO_DEBUG
-		g_logs.WriteLog("Send[fd=%d] error[%d], len is %d", fd, errno, len);
+		g_logs->WriteLog("Send[fd=%d] error[%d], len is %d", fd, errno, len);
 #endif
 	}
 }
@@ -193,14 +193,14 @@ void Server::InitListen(char* port)
 	sock = socket(PF_INET,SOCK_STREAM,IPPROTO_TCP);
 	if(sock == -1)
 	{
-		g_logs.WriteLog("socket() error, program exit!");
+		g_logs->WriteLog("socket() error, program exit!");
 		exit(1);
 	}
 
 	int flag = 1;
 	if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int)) == -1)
 	{
-		g_logs.WriteLog("setsockopt() error, program exit!");
+		g_logs->WriteLog("setsockopt() error, program exit!");
 		exit(1);
 	}
 
@@ -217,13 +217,13 @@ void Server::InitListen(char* port)
 
 	if(bind(sock,(struct sockaddr*)&serv_addr,sizeof(serv_addr)) == -1)
 	{
-		g_logs.WriteLog("bind() error, program exit!");
+		g_logs->WriteLog("bind() error, program exit!");
 		exit(1);
 	}
 
 	if(listen(sock,5) == -1)
 	{
-		g_logs.WriteLog("listen() error, program exit!");
+		g_logs->WriteLog("listen() error, program exit!");
 		exit(1);
 	}
 }
@@ -233,13 +233,13 @@ int Server::Start(char* port)
 	m_epollfd = epoll_create(MAX_EVENTS);	//创建epoll文件描述符
 	if(m_epollfd <= 0)
 	{
-		g_logs.WriteLog("Create epollfd failed[%d].", m_epollfd);
+		g_logs->WriteLog("Create epollfd failed[%d].", m_epollfd);
 		return -1;
 	}
 	
 	InitListen(port);
 	struct epoll_event events[MAX_EVENTS];
-	g_logs.WriteLog("Server running, %s 端口开启成功.", port);
+	g_logs->WriteLog("Server running, %s 端口开启成功.", port);
 
 	int checkpos = 0;
 
@@ -258,7 +258,7 @@ int Server::Start(char* port)
 			if(duration >= 60)
 			{	//长时间无操作则自动断开连接
 				close(m_events[checkpos].fd);
-				g_logs.WriteLog("连接长时间没有收到数据，主动断开连接.");
+				g_logs->WriteLog("连接长时间没有收到数据，主动断开连接[%d].", checkpos);
 				EventDel(m_epollfd, &m_events[checkpos]);
 			}
 		}
@@ -266,7 +266,7 @@ int Server::Start(char* port)
 		int fds = epoll_wait(m_epollfd, events, MAX_EVENTS, TIMEOUT);	//类似于select,返回值为可操作fd数量
 		if(fds < 0)
 		{
-			g_logs.WriteLog("Epoll_wait error,exit.");
+			g_logs->WriteLog("Epoll_wait error,exit.");
 			break;
 		}
 

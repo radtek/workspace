@@ -1,53 +1,83 @@
 #include "log.h"
 
-LogFile g_logs;
+LogFile *g_logs = LogFile::GetInstince();;
 
-void GetConfigureString(string value_name,char * value_buf,int32_t strlen,string default_value)
+LogFile *LogFile::m_pInstince = NULL;
+LogFile::Garbo LogFile::m_Garbo;
+#ifdef __GNUC__
+pthread_mutex_t LogFile::m_mutexIns = PTHREAD_MUTEX_INITIALIZER;
+#else
+HANDLE LogFile::m_hMutex = CreateMutex(NULL, FALSE, NULL);
+#endif
+
+void GetConfigureString(string value_name, char * value_buf, int32_t strlen, string default_value, const char * filename)
 {
-	bool bIsFindAppName = false;    
-	bool bIsFindKeyName = false;    
-	int position;
-	ifstream file(FILENAME,ios::in);
+	bool bIsFindKeyName = false;
+	int position = 0;
+	int temppos = 0;
+	ifstream iFile(filename, ios::in);
 
-	if(file)
+	if (!iFile)
 	{
-		while(!file.eof())
+		cout << "Not Found File [" << filename << "]" << endl;
+		ofstream oFile(filename, ios::out | ios::app);
+		oFile << value_name << " = " << default_value << endl;
+		oFile.close();
+		oFile.clear();
+		memcpy(value_buf, default_value.c_str(), strlen);
+		cout << "[" << value_name << "]" << " Not Found,use default value: " << default_value.c_str() << endl;
+		return;
+	}
+
+	while (!iFile.eof())
+	{
+		string s;
+		getline(iFile, s);
+
+		if (s[0] == '#')
+			continue;
+
+		position = s.find("=");
+		if (position != s.npos)
 		{
-			string s;
-			getline(file,s);
-
-			if(s[0] == '#')
-				continue;
-
-			position = s.find("=");
-			if(position != s.npos)
+			temppos = position - 1;
+			for (int i = temppos; i > 0; i--)
 			{
-				if(strncmp(s.c_str(),value_name.c_str(),position) == 0)
-				{
-					memcpy(value_buf,s.c_str()+position+1,s.length()-position-1);
-					bIsFindKeyName = true;
+				if (s[i] == ' ' || s[i] == '\n' || s[i] == '\r' || s[i] == '\t')
+					temppos -= 1;
+				else
 					break;
+			}
+			if (strncmp(s.c_str(), value_name.c_str(), temppos + 1) == 0)
+			{
+				temppos = position + 1;
+				for (int i = temppos; i < s.length(); i++)
+				{
+					if (s[i] == ' ' || s[i] == '\n' || s[i] == '\r' || s[i] == '\t')
+						temppos += 1;
+					else
+						break;
 				}
+
+				memcpy(value_buf, s.c_str() + temppos, s.length() - temppos);
+				bIsFindKeyName = true;
+				break;
 			}
 		}
 	}
-	else
+	
+	iFile.close();
+	iFile.clear();
+	
+	if (bIsFindKeyName == false)
 	{
-		cout<<"Not Found File ["<<FILENAME<<"]"<<endl;
+		ofstream oFile(filename, ios::out | ios::app);
+		oFile << value_name << " = " << default_value << endl;
+		oFile.close();
+		oFile.clear();
+		memcpy(value_buf, default_value.c_str(), strlen);
+		cout << "[" << value_name << "]" << " Not Found,use default value: " << default_value.c_str() << endl;
 	}
-
-	if(bIsFindKeyName == false)
-	{
-		cout<<value_name<<" Not Found,use default value:"<<default_value.c_str()<<endl;
-		memcpy(value_buf,default_value.c_str(),strlen);
-	}
-	file.close();
-}
-
-void SetConfigureString(string value_name,char * value_buf,int32_t strlen,string default_value)
-{
-	bool bIsFindAppName = false;    
-	bool bIsFindKeyName = false;
 }
 
 string GetSystemTime()
@@ -60,70 +90,296 @@ string GetSystemTime()
 
 	return system_time;
 }
-/****************************************************************************************************************************************************************/
 
-LogFile::LogFile()
+int ParseMessageHex(char *dst, char *src, int srclen)
 {
-#if defined _LINUX
-	pthread_mutex_init(&lockLog,NULL);
-#elif defined _WINDOWS
-	InitializeCriticalSection(&lockLog);
-#endif
-	mLogPath = new char[256];
-	mFileName = new char[64];
-	memset(mLogPath,0,256);
-	memset(mFileName,0,64);
-	GetConfigureString("LogPath",mLogPath,256,"./logs");
-	FileOpen();
+	if(dst == NULL || src == NULL || srclen < 0)
+		return -1;
+
+	ostringstream oss;
+	oss << setfill('0') << uppercase;
+	for(int i = 0; i < srclen; i++)
+	{
+		oss << setw(2) << hex << static_cast<int> (src[i] & 0xFF) << dec  << ' ';
+	}
+	int len = oss.str().length();
+	memcpy(dst, oss.str().c_str(), len);
+	return len;
+}
+
+LogFile::LogFile(void)
+{
+
+}
+
+LogFile::LogFile(const LogFile&)
+{
+
 }
 
 LogFile::~LogFile()
 {
-	FileClose();
-#if defined _LINUX
-	pthread_mutex_destroy(&lockLog);
-#elif defined _WINDOWS
-	DeleteCriticalSection(&lockLog);
+#ifdef __GNUC__
+	pthread_mutex_lock(&m_mutexLock);
+	CloseFile();
+	pthread_mutex_unlock(&m_mutexLock);
+	pthread_mutex_destroy(&m_mutexLock);
+#else
+	EnterCriticalSection(&m_csLock);
+	CloseFile();
+	LeaveCriticalSection(&m_csLock);
+	DeleteCriticalSection(&m_csLock);
 #endif
-
-	if(mLogPath != NULL)
+	if (m_pLogPath != NULL)
 	{
-		delete [] mLogPath;
-		mLogPath = NULL;
+		delete [] m_pLogPath;
+		m_pLogPath = NULL;
 	}
-	if(mFileName != NULL)
+
+	if (m_pFileName != NULL)
 	{
-		delete [] mFileName;
-		mFileName = NULL;
+		delete [] m_pFileName;
+		m_pFileName = NULL;
+	}
+
+	if (m_pFile != NULL)
+	{
+		delete [] m_pFile;
+		m_pFile = NULL;
 	}
 }
 
-bool LogFile::FileOpen()
+LogFile& LogFile::operator=(const LogFile&)
+{
+	return (*this);
+}
+
+void LogFile::Initialize()
+{
+	m_pLogPath = new char[PATH_LEN];
+	m_pFileName = new char[NAME_LEN];
+	m_pFile = new char[PATH_LEN + NAME_LEN];
+	memset(m_pLogPath, 0, PATH_LEN);
+	memset(m_pFileName, 0, NAME_LEN);
+	memset(m_pFile, 0, PATH_LEN + NAME_LEN);
+#ifdef __GNUC__
+	pthread_mutex_init(&m_mutexLock, NULL);
+	pthread_mutex_lock(&m_mutexLock);
+	GetConfigureString("LOG_PATH",m_pLogPath, NAME_LEN, "./logs", CONFFILE);
+	pthread_mutex_unlock(&m_mutexLock);
+#else
+	InitializeCriticalSection(&m_csLock);
+	EnterCriticalSection(&m_csLock);
+	GetConfigureString("LOG_PATH",m_pLogPath, NAME_LEN, ".\\logs\\", CONFFILE);
+	LeaveCriticalSection(&m_csLock);
+#endif
+}
+
+LogFile *LogFile::GetInstince()
+{
+	if (m_pInstince == NULL)
+	{
+#ifdef __GNUC__
+		pthread_mutex_lock(&m_mutexIns);
+		if (m_pInstince == NULL)
+		{
+			m_pInstince = new LogFile();
+			m_pInstince->Initialize();
+		}
+		pthread_mutex_unlock(&m_mutexIns);
+#else
+		WaitForSingleObject(m_hMutex, INFINITE);
+		if (m_pInstince == NULL)
+		{
+			m_pInstince = new LogFile();
+			m_pInstince->Initialize();
+		}	
+		ReleaseMutex(m_hMutex);
+#endif
+	}
+	return m_pInstince;
+}
+
+LogFile& LogFile::WriteLog(const char* format, ...)
+{
+#ifdef __GNUC__
+	pthread_mutex_lock(&m_mutexLock);
+#else
+	EnterCriticalSection(&m_csLock);
+#endif
+	
+	if (!m_osFile || !CheckFile())
+	{
+		OpenFile();
+	}
+
+	static char buffer[LOG_SIZE];
+	memset(buffer, 0, LOG_SIZE);
+	va_list ap;
+	va_start(ap, format);
+
+#ifdef __GNUC__
+	vsprintf(buffer, format, ap);
+#else
+	vsprintf_s(buffer, LOG_SIZE, format, ap);		// windows safe function
+#endif
+	va_end(ap);
+
+	static char timer[32];
+	memset(timer, 0, 32);
+	GetSysTime(timer);
+
+#ifdef __GNUC__
+	m_osFile << timer << " :[Info]" << buffer << endl;
+	pthread_mutex_unlock(&m_mutexLock);
+#else
+	m_osFile << timer << " :[Info]" << buffer << endl;
+	LeaveCriticalSection(&m_csLock);
+#endif
+	return (*this);
+}
+
+LogFile& LogFile::WriteWarn(const char* format, ...)
+{
+#ifdef __GNUC__
+	pthread_mutex_lock(&m_mutexLock);
+#else
+	EnterCriticalSection(&m_csLock);
+#endif
+	
+	if (!m_osFile || !CheckFile())
+	{
+		OpenFile();
+	}
+
+	static char buffer[LOG_SIZE];
+	memset(buffer, 0, LOG_SIZE);
+	va_list ap;
+	va_start(ap, format);
+
+#ifdef __GNUC__
+	vsprintf(buffer, format, ap);
+#else
+	vsprintf_s(buffer, LOG_SIZE, format, ap);		// windows safe function
+#endif
+	va_end(ap);
+
+	static char timer[32];
+	memset(timer, 0, 32);
+	GetSysTime(timer);
+
+#ifdef __GNUC__
+	m_osFile << timer << " :[Warning]" << buffer << endl;
+	pthread_mutex_unlock(&m_mutexLock);
+#else
+	m_osFile << timer << " :[Warning]" << buffer << endl;
+	LeaveCriticalSection(&m_csLock);
+#endif
+	return (*this);
+}
+
+LogFile& LogFile::WriteErr(const char* format, ...)
+{
+#ifdef __GNUC__
+	pthread_mutex_lock(&m_mutexLock);
+#else
+	EnterCriticalSection(&m_csLock);
+#endif
+	
+	if (!m_osFile || !CheckFile())
+	{
+		OpenFile();
+	}
+
+	static char buffer[LOG_SIZE];
+	memset(buffer, 0, LOG_SIZE);
+	va_list ap;
+	va_start(ap, format);
+
+#ifdef __GNUC__
+	vsprintf(buffer, format, ap);
+#else
+	vsprintf_s(buffer, LOG_SIZE, format, ap);		// windows safe function
+#endif
+	va_end(ap);
+
+	static char timer[32];
+	memset(timer, 0, 32);
+	GetSysTime(timer);
+
+#ifdef __GNUC__
+	m_osFile << timer << " :[Error]" << buffer << endl;
+	pthread_mutex_unlock(&m_mutexLock);
+#else
+	m_osFile << timer << " :[Error]" << buffer << endl;
+	LeaveCriticalSection(&m_csLock);
+#endif
+	return (*this);
+}
+
+bool LogFile::CloseFile()
+{
+	try 
+	{
+		if (m_osFile)
+		{
+			m_osFile.close();
+			m_osFile.clear();
+		}
+	}
+	catch (...)
+	{
+		return false;
+	}
+	return true;
+}
+
+bool LogFile::OpenFile()
 {
 	bool result = true;
-	FileClose();
-
-#if defined _LINUX
-	if(opendir(mLogPath) == NULL)
-		mkdir(mLogPath,S_IRWXU);
-#elif defined _WINDOWS
-	if(access(mLogPath,0) == -1){
-		 if(!CreateDirectory(mLogPath,NULL)){
-			 result = false;
-		 }
+#ifdef __GNUC__
+	if (opendir(m_pLogPath) == NULL)
+		mkdir(m_pLogPath, S_IRWXU);
+#else	
+	if (_access(m_pLogPath, 0) == -1) 
+	{
+		if (!CreateDirectory(m_pLogPath, NULL)) 
+		{
+			result = false;
+		}
 	}
 #endif
-	memset(mFileName,0,64);
+
+	memset(m_pFileName, 0, NAME_LEN);
 	time_t timer = time(NULL);
-	struct tm * local = localtime(&timer);
-	sprintf(mFileName,"%0.4d%0.2d%0.2d%0.2d%0.2d%0.2d",local->tm_year+1900,local->tm_mon+1,local->tm_mday,local->tm_hour,local->tm_min,local->tm_sec);
 
-	char * filename = new char[FILENAME_LEN];
-	string path = mLogPath,name = mFileName;
+#ifdef __GNUC__
+	struct tm * local;
+	local = localtime(&timer);
+	sprintf(m_pFileName, "%0.4d%0.2d%0.2d", local->tm_year + 1900, local->tm_mon + 1, local->tm_mday);
+#else
+	struct tm * local = new tm;
+	localtime_s(local, &timer);
+	sprintf_s(m_pFileName, NAME_LEN, "%0.4d%0.2d%0.2d", local->tm_year + 1900, local->tm_mon + 1, local->tm_mday);
+	
+	if (local != NULL)
+	{
+		delete local;
+		local = NULL;
+	}
+#endif
+	
 
-	sprintf(filename,"%s//%s.txt",path.c_str(),name.c_str());
-	mFile.open(filename,ios::out|ios::app);
-	if(mFile)
+	string path = m_pLogPath, name = m_pFileName;
+#ifdef __GNUC__
+	sprintf(m_pFile, "%s//%s.txt", path.c_str(), name.c_str());
+#else
+	sprintf_s(m_pFile, PATH_LEN + NAME_LEN, "%s//%s.txt", path.c_str(), name.c_str());
+#endif
+
+	CloseFile();
+	m_osFile.open(m_pFile, ios::out | ios::app);
+	if (m_osFile)
 	{
 		result = true;
 		m_lasttime = time(NULL);
@@ -133,67 +389,36 @@ bool LogFile::FileOpen()
 		result = false;
 	}
 
-	if(filename != NULL)
-	{
-		delete [] filename;
-		filename = NULL;
-	}
 	return result;
 }
 
-inline void LogFile::FileClose()
+bool LogFile::CheckFile()
 {
-	if(mFile)
-	{
-		mFile.close();
-		mFile.clear();
-	}
+#ifdef __GNUC__
+	if (opendir(m_pLogPath) == NULL)
+		return false;
+	else
+		return true;
+#else
+	if (_access(m_pFile, 0) == -1)
+		return false;
+	else
+		return true;
+#endif
 }
 
-void LogFile::WriteLog(const char* format, ...)
+void LogFile::GetSysTime(char *timer)
 {
-	if(time(NULL) - m_lasttime > 86400)
-	{
-#if defined _LINUX
-		pthread_mutex_lock(&lockLog);
-		FileOpen();
-		pthread_mutex_unlock(&lockLog);
-#elif defined _WINDOWS
-		EnterCriticalSection(&lockLog);
-		FileOpen();
-		LeaveCriticalSection(&lockLog);
+	time_t temp = time(NULL);
+	struct tm *local = new tm;
+#ifdef __GNUC__
+	local = localtime(&temp);
+	sprintf(timer, "%0.4d-%0.2d-%0.2d %0.2d:%0.2d:%0.2d", local->tm_year + 1900, local->tm_mon + 1, 
+			local->tm_mday, local->tm_hour, local->tm_min, local->tm_sec);
+#else
+	localtime_s(local, &temp);
+	sprintf_s(timer, 32, "%0.4d-%0.2d-%0.2d %0.2d:%0.2d:%0.2d", local->tm_year + 1900, local->tm_mon + 1, 
+			local->tm_mday, local->tm_hour, local->tm_min, local->tm_sec);
 #endif
-	}
-
-	if(mFile)
-	{
-		char buffer[LOG_SIZE] = {0};
-		va_list ap;
-		va_start(ap, format);
-		vsprintf(buffer, format, ap);
-		va_end(ap);
-
-#if defined _LINUX
-		pthread_mutex_lock(&lockLog);
-		mFile << GetSystemTime() << ":" << buffer << endl;
-		pthread_mutex_unlock(&lockLog);
-#elif defined _WINDOWS
-		EnterCriticalSection(&lockLog);
-		mFile << GetSystemTime() << ":" << buffer << endl;
-		LeaveCriticalSection(&lockLog);
-#endif
-	}
-	else
-	{
-#if defined _LINUX
-		pthread_mutex_lock(&lockLog);
-		FileOpen();
-		pthread_mutex_unlock(&lockLog);
-#elif defined _WINDOWS
-		EnterCriticalSection(&lockLog);
-		FileOpen();
-		LeaveCriticalSection(&lockLog);
-#endif
-	}
 }
 

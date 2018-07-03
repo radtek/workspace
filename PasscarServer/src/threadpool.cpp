@@ -88,7 +88,7 @@ void* ThreadPool::ThreadFunc(void* arg)
 #ifndef NO_DEBUF
 			if(result < 0)
 			{
-				g_logs.WriteLog("Return response error.");
+				g_logs->WriteLog("Return response error.");
 			}
 #endif			
 		}

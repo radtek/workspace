@@ -55,18 +55,18 @@ Retry:
 		db_data.rlogon(strConn,1);
 	}
 	catch(otl_exception &p){
-		g_logs.WriteLog("原始数据库重连失败，等待30秒后重新尝试.");
+		g_logs->WriteLog("原始数据库重连失败，等待30秒后重新尝试.");
 			goto Retry;
 	}
-	g_logs.WriteLog("原始数据库重连成功,[%s].",strConn);
+	g_logs->WriteLog("原始数据库重连成功,[%s].",strConn);
 }
 
 bool InitializeOtlInfo()
 {
 	pthread_mutex_init(&m_databaseMutex,NULL);
 	
-	GetConfigureString("ORACLE_DATA_CONNECT",dbinfo.strDataConnect,256,"vroad/vroad@orcl");
-	GetConfigureString("ORACLE_LOGS_CONNECT",dbinfo.strLogsConnect,256,"vroad/vroad@192.168.137.1:1521/orcl");
+	GetConfigureString("ORACLE_DATA_CONNECT", dbinfo.strDataConnect, 256, "vroad/vroad@orcl", CONFFILE);
+	GetConfigureString("ORACLE_LOGS_CONNECT", dbinfo.strLogsConnect, 256, "vroad/vroad@192.168.137.1:1521/orcl", CONFFILE);
 
 	if(OTLConnect(dbinfo.strDataConnect))
 		cout<<GetSystemTime()<<": 数据库连接成功."<<endl;
@@ -127,7 +127,7 @@ bool insert_passcar_message(VmsData * msg)
 		}
 		else
 		{
-			g_logs.WriteLog("Insert Passcar Message error,error type(%d)",msg->type);
+			g_logs->WriteLog("Insert Passcar Message error,error type(%d)",msg->type);
 			pthread_mutex_unlock(&m_databaseMutex);
 			return false;
 		}
@@ -202,10 +202,10 @@ Retry:
 		db_logs.rlogon(strConn,1);
 	}
 	catch(otl_exception &p){
-		g_logs.WriteLog("日志数据库重连失败，等待30秒后重新尝试.");
+		g_logs->WriteLog("日志数据库重连失败，等待30秒后重新尝试.");
 		goto Retry;
 	}
-	g_logs.WriteLog("日志数据库重连成功,[%s].",strConn);
+	g_logs->WriteLog("日志数据库重连成功,[%s].",strConn);
 }
 
 bool insert_recv_log(const stuLogInfo &logs)
@@ -217,7 +217,7 @@ bool insert_recv_log(const stuLogInfo &logs)
 				 (int)logs.parseresult,(int)logs.msglen,logs.remote_ip,logs.sourcemsg);
 
 #ifndef NO_DEBUG	
-	g_logs.WriteLog("Print recv_log sqls:%s",sqls);
+	g_logs->WriteLog("Print recv_log sqls:%s",sqls);
 #endif
 
 	pthread_mutex_lock(&m_databaseMutex);
@@ -231,7 +231,7 @@ bool insert_recv_log(const stuLogInfo &logs)
 		std::cerr<<GetSystemTime()<<": Insert RECV_LOG error:"<<p.msg<<std::endl;
 		std::cerr<<GetSystemTime()<<": Insert RECV_LOG error:"<<p.stm_text<<std::endl;
 		std::cerr<<GetSystemTime()<<": Insert RECV_LOG error:"<<p.var_info<<std::endl;
-		g_logs.WriteLog("Insert RECV_LOG Error:%s",sqls);
+		g_logs->WriteLog("Insert RECV_LOG Error:%s",sqls);
 		LogReConnect(dbinfo.strLogsConnect);
 		result = false;
 	}
@@ -246,7 +246,7 @@ bool insert_error_log(const stuLogInfo &logs)
 				 "(%d, %d, to_date('%s','yyyy-mm-dd hh24:mi:ss'), '%s','%s')", 
 				 (int)logs.msglen, (int)logs.parseresult, logs.servertime, logs.remote_ip, logs.sourcemsg);
 #ifndef NO_DEBUG	
-	g_logs.WriteLog("Print error_log sqls:%s",sqls);
+	g_logs->WriteLog("Print error_log sqls:%s",sqls);
 #endif
 	pthread_mutex_lock(&m_databaseMutex);
 	bool result = true;
@@ -259,7 +259,7 @@ bool insert_error_log(const stuLogInfo &logs)
 		std::cerr<<GetSystemTime()<<": Insert ERROR_LOG error:"<<p.msg<<std::endl;
 		std::cerr<<GetSystemTime()<<": Insert ERROR_LOG error:"<<p.stm_text<<std::endl;
 		std::cerr<<GetSystemTime()<<": Insert ERROR_LOG error:"<<p.var_info<<std::endl;
-		g_logs.WriteLog("Insert ERROR_LOG Error:%s",sqls);
+		g_logs->WriteLog("Insert ERROR_LOG Error:%s",sqls);
 		LogReConnect(dbinfo.strLogsConnect);
 		result = false;
 	}

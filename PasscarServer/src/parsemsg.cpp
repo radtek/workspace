@@ -72,7 +72,7 @@ int CTask::parseMsg()
 			delete [] vmsMsg;
 			vmsMsg = NULL;
 		}
-		g_logs.WriteLog("CRC校验错误，原始CRC：%x; 计算CRC：%x", crc16, tempcrc);
+		g_logs->WriteLog("CRC校验错误，原始CRC：%x; 计算CRC：%x", crc16, tempcrc);
 		result = crc_error;
 		goto RESPONSE;
 	}
@@ -211,7 +211,7 @@ int CTask::parseMsg()
 	}
 	else
 	{
-		g_logs.WriteLog("数据解析失败，错误的数据包类型(%d).",data.type);
+		g_logs->WriteLog("数据解析失败，错误的数据包类型(%d).",data.type);
 	}
 
 RESPONSE:
@@ -242,20 +242,20 @@ int CTask::Run()
 	{
 		if(!insert_passcar_message(&data))
 		{
-			g_logs.WriteLog("卡口数据插入数据库失败");
+			g_logs->WriteLog("卡口数据插入数据库失败");
 			result = insert_error;
 		}
 		else
 		{
 			if(data.type == 1)
-				g_logs.WriteLog("卡口实时数据插入数据库成功");
+				g_logs->WriteLog("卡口实时数据插入数据库成功");
 			else if(data.type == 2)
-				g_logs.WriteLog("卡口统计数据插入数据库成功");
+				g_logs->WriteLog("卡口统计数据插入数据库成功");
 		}
 	}
 	else
 	{
-		g_logs.WriteLog("卡口数据解析失败:%x",result);
+		g_logs->WriteLog("卡口数据解析失败:%x",result);
 	}
 	return result;
 }
