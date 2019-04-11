@@ -11,7 +11,7 @@
 #define LISTEN_NUM	5				//listen param
 #define BUF_SIZE	(1024*4)		//buffer size
 #define TIMEOUT		1000			//timeout
-#define MAXPACKLEN 	1536		//最大包长
+#define MAXPACKLEN 	1536			//最大包长
 #define SQLLEN 		2048
 
 #define NO_DEBUG

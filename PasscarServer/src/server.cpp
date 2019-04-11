@@ -255,7 +255,7 @@ int Server::Start(char* port)
 				continue;
 
 			long duration = now - m_events[checkpos].last_active;
-			if(duration >= 60)
+			if(duration >= 1200)
 			{	//长时间无操作则自动断开连接
 				close(m_events[checkpos].fd);
 				g_logs->WriteLog("连接长时间没有收到数据，主动断开连接[%d].", checkpos);
