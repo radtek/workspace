@@ -14,13 +14,7 @@
 #include <iostream>
 using namespace std;
 #include <string.h>
-#ifdef __GNUC__
 #include <pthread.h>
-#else
-// #include<winsock2.h> 必须在 #include<windows.h>之前
-#include <winsock2.h>
-#include <windows.h>
-#endif
 
 class ByteArray
 {

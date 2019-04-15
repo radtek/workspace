@@ -21,6 +21,8 @@ using namespace std;
 #include <string.h>
 #include <iconv.h>
 #include <sys/select.h>
+#include <sys/socket.h>
+#include <fcntl.h>
 #else
 #include <string>
 #endif

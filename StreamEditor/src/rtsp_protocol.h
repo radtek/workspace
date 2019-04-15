@@ -19,18 +19,18 @@ int rtsp_cmd_describe(t_rtsp_info *info, char *buffer);
 int rtsp_cmd_setup(t_rtsp_info *info, char *buffer, int type);
 int rtsp_cmd_play(t_rtsp_info *info, char *buffer);
 int rtsp_cmd_teardown(t_rtsp_info *info, char *buffer);
-bool rtsp_reply_parse(t_rtsp_info *info, char *buffer, int buflen, int type);
 
 // rtsp server
-int rtsp_reply_options(t_rtsp_info *info, char *buffer);
-int rtsp_reply_describe(t_rtsp_info *info, char *buffer);
-int rtsp_reply_setup(t_rtsp_info *info, char *buffer, int type);
-int rtsp_reply_play(t_rtsp_info *info, char *buffer);
-int rtsp_reply_teardown(t_rtsp_info *info, char *buffer);
-bool rtsp_cmd_parse(t_rtsp_info *info, char *buffer, int buflen, int type);
+int rtsp_reply_options(t_rtsp_reply_info *info, char *buffer);
+int rtsp_reply_describe(t_rtsp_reply_info *info, char *buffer);
+int rtsp_reply_setup(t_rtsp_reply_info *info, char *buffer, int type);
+int rtsp_reply_play(t_rtsp_reply_info *info, char *buffer);
+int rtsp_reply_teardown(t_rtsp_reply_info *info, char *buffer);
 
+// md5加密
 string get_md5_response(t_rtsp_info *info, string type, string url);
 
+// 字符串分割
 string *get_part_string(string str, char c, int &count);
 void string_replace(string &str,char c);
 

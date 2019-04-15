@@ -20,16 +20,16 @@ using namespace std;
 
 LOG_QUEUE *log_queue = NULL;
 // 设备信息,deviceid为key
-map<unsigned int, t_device_info*> g_mapDeviceInfo;
-// 当前播放列表,deviceid为key
-map<unsigned int, t_video_play_info*> g_mapVideoPlay;
-
+extern map<unsigned int, t_device_info*> g_mapDeviceInfo;
+char g_localhost[16];
 
 bool get_device_info();
 
-
 int main(int argc, char *argv[])
 {
+	memset(g_localhost, 0, 16);
+	sprintf(g_localhost,"192.168.136.120");
+
 	start_log_thread();
 	sleep(1);
 	log_queue = create_log_queue("rtsp_logs");
@@ -55,15 +55,29 @@ bool get_device_info()
 		if(!database_open(str.c_str()))
 		{
 			log_info(log_queue, "connect oracle failed.");
+			log_debug("数据库连接成功, %s", str.c_str())
 			break;
 		}
 		if(!select_device_info(g_mapDeviceInfo))
 		{
 			log_info(log_queue, "get device info failed.");
+			log_debug("获取设备信息失败", str.c_str())
 			break;
+		}
+		else
+		{
+			map<unsigned int, t_device_info*>::iterator iter;
+			log_debug("获取设备信息成功");
+			for(iter = g_mapDeviceInfo.begin(); iter != g_mapDeviceInfo.end(); iter++)
+			{
+				log_debug("DeviceID: %10d, DeviceType: %.1d, IP: %15s, Username: %8s, Password: %12s",
+						iter->second->deviceid, iter->second->devicetype, iter->second->ipaddr,
+						iter->second->username, iter->second->password);
+			}
 		}
 		database_close();
 		return true;
 	}while(0);
 	return false;
 }
+

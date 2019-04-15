@@ -34,6 +34,15 @@
 #define log_info(queue, format, args...) do{ string str = GetSystemTime(); \
 	record_log(queue, "%s [info]: "format"\n", str.c_str(), ##args); }while(0);
 
+#ifndef NO_DEBUG
+#define log_debug(format, args...) do{ \
+		string str = GetSystemTime(); \
+		printf("%s [debug]: "format"\n", str.c_str(), ##args); \
+		}while(0);
+#else
+#define log_debug(format, args...) do{}while(0);
+#endif
+
 typedef struct _LOG
 {
 	int fd;

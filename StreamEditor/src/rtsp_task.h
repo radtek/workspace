@@ -8,6 +8,16 @@
 //	描    述:  
 // =====================================================================================
 
+#ifndef _RTSP_TASK_H_H_H
+#define _RTSP_TASK_H_H_H
 
-bool rtsp_task_initialize();
-void rtsp_task_worker(void *arg);
+#include "rtsp_struct.h"
+
+static pthread_mutex_t g_mapVideoLock;
+
+void video_play_free(t_video_play_info* &player);
+void video_task_add(int deviceid);
+void video_task_remove(int deviceid);
+t_video_play_info *video_task_get(int deviceid);
+
+#endif

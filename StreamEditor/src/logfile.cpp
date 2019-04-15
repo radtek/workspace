@@ -20,7 +20,6 @@ int record_log(LOG_QUEUE *log_queue, const char *format, ...)
 	LOG *log = GET_PRODUCER(log_queue);
 	if(log == NULL)
 	{
-		// cout << "error" << endl;
 		return -1;
 	}
 	log->fd = log_queue->fd;
@@ -37,14 +36,14 @@ LOG_QUEUE *create_log_queue(const char *log_name)
 	pthread_mutex_lock(&log_queue_mutex);
 	if(log_count >= MAX_LOG_QUEUE_COUNT)
 	{
-		// cout << "log queue count is overflow!" << endl;
+		log_debug("log queue count is overflow!");
 		pthread_mutex_unlock(&log_queue_mutex);
 		return NULL;
 	}
 	LOG_QUEUE *log_queue = (LOG_QUEUE*)malloc(sizeof(LOG_QUEUE) + sizeof(LOG) * MAX_LOG_QUEUE_SIZE);
 	if(log_queue == NULL)
 	{
-		// cout << "create log queue error!" << endl;
+		log_debug("create log queue error!");
 		pthread_mutex_unlock(&log_queue_mutex);
 		return NULL;
 	}

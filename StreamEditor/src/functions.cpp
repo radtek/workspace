@@ -93,8 +93,11 @@ string *get_part_string(string msg, string separator, int &count)
 	{
 		int n = msg.find(separator, pos);
 		string str = msg.substr(pos, n - pos);
-		list_str.push_back(str);
-		count += 1;
+		if(str != "")
+		{
+			list_str.push_back(str);
+			count += 1;
+		}
 		if(n == -1)
 		{
 			break;

@@ -13,9 +13,11 @@
 
 #include <string>
 using namespace std;
+#include <sys/select.h>
 
 #define MAX_BUF_SIZE (2048)
 #define MAX_CLNT_ONLINE (32)
+#define MAX_VIDEO_CACHE (10240)
 
 typedef enum 
 {
@@ -36,14 +38,6 @@ typedef struct
 	int port;
 	// 套接字
 	int sockfd;
-	// 需要断开连接时，此位置true
-	bool stop;
-	// 头标记
-	int head;
-	// 尾标记
-	int tail;
-	// 接收缓存
-	char buffer[MAX_BUF_SIZE];
 }tcp_conn_info;
 
 typedef struct
@@ -52,8 +46,10 @@ typedef struct
 	int port;
 	// 服务端套接字
 	int sockfd;
-	// 上次连接时间,5分钟
-	time_t last_time;
+	// 无连接时间,单位:秒, 60秒无连接则关闭服务端口
+	int time_count;
+	// 
+	int clnt_count;
 	// 最大支持32个用户同时访问
 	tcp_conn_info *clnt[MAX_CLNT_ONLINE];
 }tcp_server_info;
@@ -80,9 +76,23 @@ typedef struct
 	char session[64];
 	char nonce[64];
 	char realm[32];
+	char ssrc[2][16];
 	int cmd_seq;
 	bool secret;
 }t_rtsp_info;
+
+typedef struct
+{
+	// 开启的虚拟rtsp连接地址
+	char rtsp_url[128];
+	char video_url[128];
+	char audio_url[128];
+	// reply seq id
+	int cmd_seq;
+	char session[64];
+	char ssrc[2][16];
+	char transport[64];
+}t_rtsp_reply_info;
 
 typedef struct
 {
@@ -90,12 +100,15 @@ typedef struct
 	tcp_conn_info *device_conn;
 	tcp_server_info *rtsp_serv;
 	t_rtsp_info *rtsp_info;
+	t_rtsp_reply_info *reply_info;
 
-	string reply_options;
-	string reply_describe[2];
-	string reply_setup[2];
-	string reply_play;
-	string reply_teardown;
+	// 停止符
+	bool stop;
+	int thread_num;
+	// rtsp_serv lock
+	pthread_mutex_t serv_lock;
+	fd_set serv_fds;
+
 }t_video_play_info;
 
 typedef struct

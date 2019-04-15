@@ -55,7 +55,7 @@ static bool route_check(http_message *http_msg, char *route_prefix)
 	mg_vcmp(&http_msg->method, "POST");
 	mg_vcmp(&http_msg->method, "PUT");
 	mg_vcmp(&http_msg->method, "DELETE");
-}				                                                                                                                                             
+}
 
 void HttpServer::AddHandler(const std::string &url, ReqHandler req_handler)
 {

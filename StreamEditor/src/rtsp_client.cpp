@@ -8,9 +8,10 @@
 //	描    述:  
 // =====================================================================================
 
-#include "bytearray.h"
+#include "rtsp_task.h"
 #include "rtsp_client.h"
 #include "rtsp_protocol.h"
+#include "bytearray.h"
 #include "logfile.h"
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -26,7 +27,6 @@ tcp_conn_info *create_tcp_client_conn(char *ipaddr, int port)
 	memset(clnt, 0, sizeof(tcp_conn_info));
 	memcpy(clnt->ipaddr, ipaddr, 16);
 	clnt->port = port;
-	clnt->stop = false;
 
 	do{
 		clnt->sockfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -42,6 +42,7 @@ tcp_conn_info *create_tcp_client_conn(char *ipaddr, int port)
 		sock_addr.sin_addr.s_addr = inet_addr(ipaddr);
 		sock_addr.sin_port = htons(port);
 
+		// 连接到设备
 		if(connect(clnt->sockfd, (struct sockaddr*)&sock_addr, sizeof(sockaddr_in)) == -1)
 		{
 			log_info(log_queue, "%s[%05d]: connect() failed.", __FILE__, __LINE__);
@@ -58,6 +59,66 @@ tcp_conn_info *create_tcp_client_conn(char *ipaddr, int port)
 	return NULL;
 }
 
+void *rtsp_worker_start(void *arg)
+{
+	log_debug("rtsp_worker_start 线程启动");
+	pthread_detach(pthread_self());
+	int deviceid = *((int*)arg);
+	t_video_play_info *player = video_task_get(deviceid);
+	char buffer[MAX_VIDEO_CACHE] = { 0 };
+	int sockfd = player->device_conn->sockfd;
+
+	while(true)
+	{
+		if(player->stop)
+		{
+			log_debug("rtsp_worker_start 线程准备退出");
+			break;
+		}
+
+		int n = recv(player->device_conn->sockfd, buffer, MAX_VIDEO_CACHE, 0);
+		if(n > 0)
+		{
+			log_debug("rtsp_worker_start 11111");
+			if(player->rtsp_serv->clnt_count != 0)
+			{
+				log_debug("发送视频");
+				int clnt_count = player->rtsp_serv->clnt_count;
+				for(int i = 0; i < MAX_CLNT_ONLINE; i++)
+				{
+					if(clnt_count == 0)
+					{
+						break;
+					}
+					if(player->rtsp_serv->clnt[i] != NULL)
+					{
+						send(player->rtsp_serv->clnt[i]->sockfd, buffer, n, 0);
+						clnt_count -= 1;
+					}
+				}
+			}
+		}
+		else if(n == 0)
+		{
+			log_debug("rtsp_worker_start 22222");
+			close(sockfd);
+			player->stop = true;
+		}
+		else
+		{
+			log_debug("rtsp_worker_start 33333");
+			if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+			{
+				continue;
+			}
+			close(sockfd);
+			player->stop = true;
+		}
+	}
+	log_debug("rtsp_worker_start 线程退出");
+	return NULL;
+}
+
 bool rtsp_request(t_video_play_info *player)
 {
 	for(int i = 0; i < 6; i++)
@@ -68,111 +129,17 @@ bool rtsp_request(t_video_play_info *player)
 			return false;
 		}
 	}
+	player->reply_info = new t_rtsp_reply_info;
+	memset(player->reply_info, 0, sizeof(t_rtsp_reply_info));
+	memcpy(player->reply_info->session, player->rtsp_info->session, 64);
+	memcpy(player->reply_info->ssrc[0], player->rtsp_info->ssrc[0], 16);
+	memcpy(player->reply_info->ssrc[1], player->rtsp_info->ssrc[1], 16);
 	return true;
-}
-
-void *rtsp_worker_start(void *arg)
-{
-	return NULL;
-}
-
-/*
-void rtsp_worker_start(tcp_conn_info *clnt, char *url, char *username, char *password)
-{
-	rtsp_info *info = new rtsp_info;
-	info->cmd_seq = 0;
-	info->secret = false;
-	rtsp_init(info, url, username, password);
-
-ReConnectRtsp:
-	clnt->sockfd = connect_serv(clnt->ipaddr, clnt->port);
-	if(clnt->sockfd == -1)
-	{
-		log_info(log_queue, "connect server [%s:%d] failed.", clnt->ipaddr, clnt->port);
-		return;
-	}
-
-	do{
-		bool isFail = false;
-		for(int i = 0; i < 6; i++)
-		{
-			if(!send_rtsp_command(clnt, info, i))
-			{
-				log_info(log_queue, "send_rtsp_command %d failed.", i);
-				isFail = true;
-				break;
-			}
-		}
-
-		if(isFail)
-		{
-			break;
-		}
-
-		ByteArray *rtpArray = new ByteArray();
-		pthread_t pid = 0;
-		//pthread_create(&pid, NULL, rtp_parse_thread, (void*)rtpArray);
-
-		char buffer[2048] = { 0 };
-		int buflen = 0;
-		while(true)
-		{
-			if(clnt->stop)
-			{
-				send_rtsp_command(clnt, info, 7);
-				close(clnt->sockfd);
-				break;
-			}
-
-			buflen = recv(clnt->sockfd, buffer, 2048, 0);
-			if(buflen <= 0)
-			{
-				if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
-				{
-					continue;
-				}
-				close(clnt->sockfd);
-				break;
-			}
-			else
-			{
-				rtpArray->put_message(buffer, buflen);
-			}
-		}
-
-		if(pthread_cancel(pid) != 0)
-		{
-			log_info(log_queue, "pthread_cancel() error!");
-		}
-
-		if(rtpArray != NULL)
-		{
-			delete rtpArray;
-			rtpArray = NULL;
-		}
-	}while(0);
-
-	if(clnt != NULL)
-	{
-		delete clnt;
-		clnt = NULL;
-	}
-	if(info != NULL)
-	{
-		delete info;
-		info = NULL;
-	}
-}
-*/
-
-void rtsp_worker_stop(tcp_conn_info *clnt)
-{
-	clnt->stop = true;
 }
 
 bool send_rtsp_command(t_video_play_info *player, int type)
 {
-	char buffer[1024] = { 0 };
+	char buffer[MAX_BUF_SIZE] = { 0 };
 	int buflen = 0;
 	switch(type)
 	{
@@ -200,13 +167,12 @@ bool send_rtsp_command(t_video_play_info *player, int type)
 		default:
 			break;
 	}
-	int len = 0;
 
 	// 发送command数据
 	for(int i = 0; i < 3; i++)
 	{
-		len = send(player->device_conn->sockfd, buffer, buflen, 0);
-		if(len > 0)
+		int n = send(player->device_conn->sockfd, buffer, buflen, 0);
+		if(n > 0)
 		{
 			break;
 		}
@@ -218,13 +184,18 @@ bool send_rtsp_command(t_video_play_info *player, int type)
 	}
 
 	// 接收reply数据
-	memset(player->device_conn->buffer, 0, MAX_BUF_SIZE);
+	memset(buffer, 0, MAX_BUF_SIZE);
+	int length = 0;
 	for(int j = 0; j < 3; j++)
 	{
-		len = recv(player->device_conn->sockfd, player->device_conn->buffer, MAX_BUF_SIZE, 0);
-		if(len > 0)
+		int n = recv(player->device_conn->sockfd, buffer + length, MAX_BUF_SIZE - length, 0);
+		if(n > 0)
 		{
-			break;
+			length += n;
+			if(buffer[n - 2] == '\r' && buffer[n - 1] == '\n')
+			{
+				break;
+			}
 		}
 
 		if((errno != EINTR && errno != EWOULDBLOCK && errno != EAGAIN))
@@ -233,60 +204,175 @@ bool send_rtsp_command(t_video_play_info *player, int type)
 		}
 	}
 
-	switch(type)
-	{
-		case enum_cmd_options:
-			player->reply_options = player->device_conn->buffer;
-			break;
-		case enum_cmd_describe:
-			player->reply_describe[0] = player->device_conn->buffer;
-			break;
-		case enum_cmd_describe_secret:
-			player->reply_describe[1] = player->device_conn->buffer;
-			break;
-		case enum_cmd_setup_video:
-			player->reply_setup[0] = player->device_conn->buffer;
-			break;
-		case enum_cmd_setup_audio:
-			player->reply_setup[1] = player->device_conn->buffer;
-			break;
-		case enum_cmd_play:
-			player->reply_play = player->device_conn->buffer;
-			break;
-		case enum_cmd_teardown:
-			player->reply_teardown = player->device_conn->buffer;
-			break;
-	}
-
 	// 处理应答数据
-	rtsp_reply_parse(player->rtsp_info, player->device_conn->buffer, len, type);
+	rtsp_reply_parse(player->rtsp_info, buffer, length, type);
 	return true;
 }
 
-/*
-void *rtp_parse_thread(void *arg)
+bool rtsp_reply_parse(t_rtsp_info *info, char *buffer, int buflen, int cmd)
 {
-	ByteArray *rtpArray = (ByteArray*)arg;
-	char buffer[2048] = { 0 };
-	int buflen = 0;
-	while(true)
+	char *buf = new char[buflen - 4 + 1];
+	memset(buf, 0, buflen - 4 + 1);
+	memcpy(buf, buffer, buflen - 4);
+	string message = buf;
+
+	if(buf != NULL)
 	{
-		memset(buffer, 0, 2048);
-		while(true)
+		delete buf;
+		buf = NULL;
+	}
+
+	int line_count = 0;
+	string *lines = get_part_string(message, "\r\n", line_count);
+	for(int i = 0; i < line_count; i++)
+	{
+		int count = 0;
+		string *parts = get_part_string(lines[i], " ", count);
+		
+		// 根据发送指令解析数据
+		switch(cmd)
 		{
-			if(rtpArray->get_message(buffer, 4, true, false))
-			{
+			case enum_cmd_options:
 				break;
-			}
+			case enum_cmd_describe:
+			case enum_cmd_describe_secret:
+				if(strcmp(parts[0].c_str(), "RTSP/1.0") == 0)
+				{
+					if(strcmp(parts[1].c_str(), "401") == 0)
+					{
+						info->secret = true;
+					}
+				}
+				else if(strcmp(parts[0].c_str(), "WWW-Authenticate:") == 0)
+				{
+					if(strcmp(parts[1].c_str(), "Digest") == 0)
+					{
+						for(int j = 2; j < count; j++)
+						{
+							string_replace(parts[j], '\"');
+							string_replace(parts[j], ',');
+							int n = 0;
+							string *args = get_part_string(parts[j], "=", n);
+							if(n >= 2)
+							{
+								if(strcmp(args[0].c_str(), "realm") == 0)
+								{
+									memcpy(info->realm, args[1].c_str(), args[1].length());
+								}
+								else if(strcmp(args[0].c_str(), "nonce") == 0)
+								{
+									memcpy(info->nonce, args[1].c_str(), args[1].length());
+								}
+							}
+							if(args != NULL)
+							{
+								delete [] args;
+								args = NULL;
+							}
+						}
+					}
+				}
+				else if(strcmp(parts[0].c_str(), "m=video") == 0)
+				{
+					for(; i < line_count; i++)
+					{
+						if(strncmp(lines[i].c_str(), "a=control:", 10) == 0)
+						{
+							string tmp = lines[i].substr(10, lines[i].length());
+							memcpy(info->video_url, tmp.c_str(), tmp.length());
+						}
+						else if(strncmp(lines[i].c_str(), "m=audio", 7) == 0)
+						{
+							i--;
+							break;
+						}
+					}
+				}
+				else if(strcmp(parts[0].c_str(), "m=audio") == 0)
+				{
+					for(; i < line_count; i++)
+					{
+						if(strncmp(lines[i].c_str(), "a=control:", 10) == 0)
+						{
+							string tmp = lines[i].substr(10, lines[i].length());
+							memcpy(info->audio_url, tmp.c_str(), tmp.length());
+						}
+						else if(strncmp(lines[i].c_str(), "m=video", 7) == 0)
+						{
+							i--;
+							break;
+						}
+					}
+				}
+				break;
+			case enum_cmd_setup_video:
+			case enum_cmd_setup_audio:
+				if(strcmp(parts[0].c_str(), "Session:") == 0)
+				{
+					int n = 0;
+					string *strs = get_part_string(parts[1], ";", n);
+					memcpy(info->session, strs[0].c_str(), strs[0].length());
+					if(strs != NULL)
+					{
+						delete [] strs;
+						strs = NULL;
+					}
+				}
+				else if(strcmp(parts[0].c_str(), "Transport:") == 0)
+				{
+					int n = 0;
+					string *strs = get_part_string(parts[1], ";", n);
+					for(int j = 2; j < n; j++)
+					{
+						string_replace(strs[j], '\"');
+						string_replace(strs[j], ',');
+						int m = 0;
+						string *args = get_part_string(strs[j], "=", m);
+						if(m >= 2)
+						{
+							if(strcmp(args[0].c_str(), "ssrc") == 0)
+							{
+								if(cmd == enum_cmd_setup_video)
+								{
+									memcpy(info->ssrc[0], args[1].c_str(), args[1].length());
+								}
+								else
+								{
+									memcpy(info->ssrc[1], args[1].c_str(), args[1].length());
+								}
+							}
+						}
+						if(args != NULL)
+						{
+							delete [] args;
+							args = NULL;
+						}
+					}
+					if(strs != NULL)
+					{
+						delete [] strs;
+						strs = NULL;
+					}
+				}
+				break;
+			case enum_cmd_play:
+				break;
+			case enum_cmd_teardown:
+				break;
+			default:
+				break;
 		}
-		int buflen = ((buffer[2] & 0xFF) * 256) + (buffer[3] & 0xFF);
-		while(true)
+		if(parts != NULL)
 		{
-			if(rtpArray->get_message(buffer + 4, buflen, true, false))
-			{
-				break;
-			}
+			delete [] parts;
+			parts = NULL;
 		}
 	}
+	if(lines != NULL)
+	{
+		delete [] lines;
+		lines = NULL;
+	}
+	return true;
 }
-*/
+

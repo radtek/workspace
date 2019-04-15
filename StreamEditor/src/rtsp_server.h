@@ -19,15 +19,12 @@
 // 返回套接字
 int create_tcp_server(int port);
 // 服务端工作线程, 处理rtsp请求
-static void *tcp_server_worker(void *arg);
-// 停止线程,并关闭套接字
-void tcp_server_stop(t_video_play_info *player);
+void *rtsp_server_start(void *arg);
+// rtsp应答
+bool rtsp_response(t_video_play_info *player, int sockfd);
+// 接收rtsp
+int recv_rtsp_command(t_video_play_info *player, int sockfd);
 
-void on_accept(int fd, short events, void *arg);
-void buf_recv_cb(struct bufferevent *bev, void *arg);
-void buf_error_cb(struct bufferevent *bev, short events, void *arg);
-
-bool recv_rtsp_command(int sock);
-
+int rtsp_cmd_parse(t_rtsp_reply_info *info, char *buffer, int buflen);
 #endif
 

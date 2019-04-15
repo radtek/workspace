@@ -12,6 +12,8 @@
 static pthread_mutex_t db_lock = PTHREAD_MUTEX_INITIALIZER;
 otl_connect db_conn;
 
+map<unsigned int, t_device_info*> g_mapDeviceInfo;
+
 string get_otl_conn(char *username, char *password,char *ipaddr, char *port, char *dbname)
 {
 	char buffer[1024] = { 0 };
@@ -54,8 +56,10 @@ bool database_close()
 	}
 	catch(otl_exception &p)
 	{
+		return false;
 	}
 	pthread_mutex_unlock(&db_lock);
+	return true;
 }
 
 bool select_device_info(map<unsigned int, t_device_info*> &mapDeviceInfo)
