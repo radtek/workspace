@@ -28,7 +28,9 @@ bool get_device_info();
 int main(int argc, char *argv[])
 {
 	memset(g_localhost, 0, 16);
-	sprintf(g_localhost,"192.168.136.120");
+	char port[8] = { 0 };
+	GetConfigureString("local.ipaddr", g_localhost, 16, "127.0.0.1", CONFFILE);
+	GetConfigureString("http.Service", port, 8, "8000", CONFFILE);
 
 	start_log_thread();
 	sleep(1);
@@ -38,9 +40,9 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	std::string port = "8000";
+	std::string httpport = port;
 	auto http_server = std::shared_ptr<HttpServer>(new HttpServer);
-	http_server->Init(port);
+	http_server->Init(httpport);
 	http_server->AddHandler("/rtsp/describe", handle_describe);
 	http_server->AddHandler("/rtsp/undescribe", handle_undescribe);
 	http_server->Start();
@@ -51,17 +53,30 @@ int main(int argc, char *argv[])
 bool get_device_info()
 {
 	do{
-		string str = get_otl_conn("EHL_VIPS", "ehl1234", "37.79.2.5", "1521", "RACDB");
+		char ora_ip[16] = { 0 };
+		char ora_port[8] = { 0 };
+		char ora_user[32] = { 0 };
+		char ora_pwd[32] = { 0 };
+		char ora_name[16] = { 0 };
+		GetConfigureString("oracle.ipaddr", ora_ip, 16, "127.0.0.1", CONFFILE);
+		GetConfigureString("oracle.port", ora_port, 8, "1521", CONFFILE);
+		GetConfigureString("oracle.username", ora_user, 32, "EHL_VIPS", CONFFILE);
+		GetConfigureString("oracle.password", ora_pwd, 32, "ehl1234", CONFFILE);
+		GetConfigureString("oracle.name", ora_name, 16, "RACDB", CONFFILE);
+		
+		string str = get_otl_conn(ora_user, ora_pwd, ora_ip, ora_port, ora_name);
 		if(!database_open(str.c_str()))
 		{
 			log_info(log_queue, "connect oracle failed.");
-			log_debug("数据库连接成功, %s", str.c_str())
+			cout << str.c_str() << endl;
+			log_debug("数据库连接失败, 程序退出, [%s]", str.c_str());
 			break;
 		}
+
 		if(!select_device_info(g_mapDeviceInfo))
 		{
 			log_info(log_queue, "get device info failed.");
-			log_debug("获取设备信息失败", str.c_str())
+			log_debug("获取设备信息失败, 程序退出");
 			break;
 		}
 		else

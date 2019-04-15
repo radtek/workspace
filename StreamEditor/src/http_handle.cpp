@@ -20,6 +20,7 @@ using namespace std;
 #include "jsoncpp/json/json.h"
 #include "rtsp_task.h"
 #include "logfile.h"
+#include "bytearray.h"
 
 // 存储的设备信息
 extern map<unsigned int, t_device_info*> g_mapDeviceInfo;
@@ -69,7 +70,6 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 			deviceid_ptr = mapDeviceIdPtrKeeper[deviceid];
 		}
 
-
 		if(g_mapVideoPlay.find(deviceid) == g_mapVideoPlay.end())
 		{	// 若不在当前播放列表内
 			map<unsigned int, t_device_info*>::iterator iter = g_mapDeviceInfo.find(deviceid);
@@ -94,6 +94,32 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 				sprintf(play_info->rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/main/av_stream", 
 						play_info->device_info->ipaddr, play_info->device_info->rtspport);
 
+				// rtsp server,开启端口,并等待连接
+				int sockfd = create_tcp_server(service_port);
+				if(sockfd == -1)
+				{
+					// 释放内存
+					play_info->stop = true;
+					video_task_remove(deviceid);
+					video_play_free(play_info);
+					ret = "create server failed";
+					log_debug("端口号 %d 启动失败,端口号或已占用", play_info->rtsp_serv->port);
+					break;
+				}
+				play_info->rtsp_serv = new tcp_server_info;
+				memset(play_info->rtsp_serv, 0, sizeof(tcp_server_info));
+				play_info->rtsp_serv->port = service_port;
+				play_info->rtsp_serv->sockfd = sockfd;
+				FD_ZERO(&play_info->serv_fds);
+				FD_SET(sockfd, &play_info->serv_fds);
+				pthread_mutex_init(&play_info->serv_lock, NULL);
+				pthread_t pid_serv;
+				pthread_create(&pid_serv, NULL, rtsp_server_start, (void*)deviceid_ptr);
+
+				// 创建解析队列
+				play_info->rtp_array = rtp_array_create(1024 * 1024);
+				pthread_t pid;
+				pthread_create(&pid, NULL, byte_array_process_start, (void*)deviceid_ptr);
 
 				// 与设备的连接信息
 				play_info->device_conn = create_tcp_client_conn(play_info->device_info->ipaddr, play_info->device_info->rtspport);
@@ -123,28 +149,6 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 				pthread_t pid_clnt;
 				pthread_create(&pid_clnt, NULL, rtsp_worker_start, (void*)deviceid_ptr);
 				
-				// rtsp server,开启端口,并等待连接
-				int sockfd = create_tcp_server(service_port);
-				if(sockfd == -1)
-				{
-					// 释放内存
-					video_task_remove(deviceid);
-					video_play_free(play_info);
-					ret = "create server failed";
-					log_debug("端口号 %d 启动失败,端口号或已占用", play_info->rtsp_serv->port);
-					break;
-				}
-				play_info->rtsp_serv = new tcp_server_info;
-				memset(play_info->rtsp_serv, 0, sizeof(tcp_server_info));
-				play_info->rtsp_serv->port = service_port;
-				play_info->rtsp_serv->sockfd = sockfd;
-				FD_ZERO(&play_info->serv_fds);
-				FD_SET(sockfd, &play_info->serv_fds);
-				pthread_mutex_init(&play_info->serv_lock, NULL);
-				pthread_t pid_serv;
-				pthread_create(&pid_serv, NULL, rtsp_server_start, (void*)deviceid_ptr);
-
-
 				// 虚拟地址
 				sprintf(play_info->reply_info->rtsp_url, "rtsp://%s:%d/video/h264/%d", g_localhost, service_port, deviceid);
 				sprintf(play_info->reply_info->video_url, "%s/trackID=1", play_info->reply_info->rtsp_url);

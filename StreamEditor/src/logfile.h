@@ -32,13 +32,13 @@
 #define GET_CONSUMER(row) ((row)->producer != (row)->consumer) ? &(row)->items[(row)->consumer] : NULL
 #define GET_PRODUCER(row) (((row)->producer + 1) % (row)->size != (row)->consumer) ? &(row)->items[(row)->producer] : NULL
 #define log_info(queue, format, args...) do{ string str = GetSystemTime(); \
-	record_log(queue, "%s [info]: "format"\n", str.c_str(), ##args); }while(0);
+	record_log(queue, "%s [info]: "format"\n", str.c_str(), ##args); }while(0)
 
 #ifndef NO_DEBUG
 #define log_debug(format, args...) do{ \
-		string str = GetSystemTime(); \
-		printf("%s [debug]: "format"\n", str.c_str(), ##args); \
-		}while(0);
+		string log_debug_str = GetSystemTime(); \
+		printf("%s [debug]: "format"\n", log_debug_str.c_str(), ##args); \
+		}while(0)
 #else
 #define log_debug(format, args...) do{}while(0);
 #endif

@@ -59,6 +59,7 @@ tcp_conn_info *create_tcp_client_conn(char *ipaddr, int port)
 	return NULL;
 }
 
+
 void *rtsp_worker_start(void *arg)
 {
 	int deviceid = *((int*)arg);
@@ -83,22 +84,7 @@ void *rtsp_worker_start(void *arg)
 		int n = recv(player->device_conn->sockfd, buffer, MAX_VIDEO_CACHE, 0);
 		if(n > 0)
 		{
-			if(player->rtsp_serv->clnt_count != 0)
-			{
-				int clnt_count = player->rtsp_serv->clnt_count;
-				for(int i = 0; i < MAX_CLNT_ONLINE; i++)
-				{
-					if(clnt_count == 0)
-					{
-						break;
-					}
-					if(player->rtsp_serv->clnt[i] != NULL)
-					{
-						send(player->rtsp_serv->clnt[i]->sockfd, buffer, n, 0);
-						clnt_count -= 1;
-					}
-				}
-			}
+			put_byte_array(player->rtp_array, buffer, n);
 		}
 		else if(n == 0)
 		{
@@ -215,6 +201,8 @@ bool send_rtsp_command(t_video_play_info *player, int type)
 	// 处理应答数据
 	return rtsp_reply_parse(player->rtsp_info, buffer, length, type);
 }
+
+
 
 bool rtsp_reply_parse(t_rtsp_info *info, char *buffer, int buflen, int cmd)
 {

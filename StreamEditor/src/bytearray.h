@@ -11,65 +11,22 @@
 #ifndef __BYTEARRAY_H_H_H
 #define __BYTEARRAY_H_H_H
 
+#include "rtsp_struct.h"
 #include <iostream>
 using namespace std;
 #include <string.h>
 #include <pthread.h>
 
-class ByteArray
-{
-public:
-	ByteArray(int len = 1024*1024);
-	virtual ~ByteArray();
-public:
-	bool put_message(char *buffer, int length);
-	// block: 是否阻塞读取数据, reserve: 读取数据后是否保留
-	bool get_message(char *buffer, int length, bool block = false, bool reserve = false);
-	void clear_array();
-
-	// 待取数据长度
-	int get_length()
-	{
-#ifdef __GNUC__
-		pthread_mutex_lock(&m_mutexLock);
-		int n = m_totalLen - m_remainLen;
-		pthread_mutex_unlock(&m_mutexLock);
-#else
-		EnterCriticalSection(&m_csLock);
-		int n = m_totalLen - m_remainLen;
-		LeaveCriticalSection(&m_csLock);
-#endif
-		return n;
-	}
-
-	// 可写数据长度
-	int get_remainlen()
-	{
-#ifdef __GNUC__
-		pthread_mutex_lock(&m_mutexLock);
-		int n = m_remainLen;
-		pthread_mutex_unlock(&m_mutexLock);
-#else
-		EnterCriticalSection(&m_csLock);
-		int n = m_remainLen;
-		LeaveCriticalSection(&m_csLock);
-#endif
-		return n;
-	}
-private:
-#ifdef __GNUC__
-	pthread_mutex_t m_mutexLock;
-	pthread_cond_t m_condLock;
-#else
-	CRITICAL_SECTION m_csLock;
-	HANDLE m_hEvent;
-#endif
-
-	char *m_buffer;
-	int m_remainLen;
-	int m_totalLen;
-	int m_beginPos;
-	int m_endPos;
-};
+// 创建对象
+t_rtp_byte_array *rtp_array_create(int size = 1024 * 1024);
+// 取出完整rtp数据包
+int get_rtp_buffer(t_rtp_byte_array *rtp_array, unsigned char *buf);
+// 放进队列
+bool put_byte_array(t_rtp_byte_array *rtp_array, char *buf, int len);
+// 要取出的长度
+bool get_byte_array(t_rtp_byte_array *rtp_array, char *buf, int len);
+// 查找包头
+void find_rtp_head(t_rtp_byte_array *rtp_array, char c);
+void *byte_array_process_start(void *arg);
 
 #endif

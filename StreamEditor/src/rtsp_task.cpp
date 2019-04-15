@@ -21,7 +21,6 @@ pthread_mutex_t g_mapVideoLock = PTHREAD_MUTEX_INITIALIZER;
 
 void video_play_free(t_video_play_info* &player)
 {
-
 	if(player->rtsp_serv != NULL)
 	{
 		for(int i = 0; i < MAX_CLNT_ONLINE; i++)
@@ -35,6 +34,18 @@ void video_play_free(t_video_play_info* &player)
 		}
 		delete player->rtsp_serv;
 		player->rtsp_serv = NULL;
+	}
+	if(player->rtp_array != NULL)
+	{
+		pthread_mutex_destroy(&player->rtp_array->lock);
+		pthread_cond_destroy(&player->rtp_array->cond);
+		if(player->rtp_array->buffer != NULL)
+		{
+			delete [] player->rtp_array->buffer;
+			player->rtp_array->buffer = NULL;
+		}
+		delete player->rtp_array;
+		player->rtp_array = NULL;
 	}
 	if(player->reply_info != NULL)
 	{
@@ -72,6 +83,7 @@ void video_task_add(int deviceid)
 	player->device_conn = NULL;
 	player->rtsp_serv = NULL;
 	player->rtsp_info = NULL;
+	player->rtp_array = NULL;
 	player->stop = false;
 	g_mapVideoPlay[deviceid] = player;
 	pthread_mutex_unlock(&g_mapVideoLock);

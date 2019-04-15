@@ -20,3 +20,4 @@ bool rtsp_request(t_video_play_info *player);
 bool send_rtsp_command(t_video_play_info *player, int type);
 
 bool rtsp_reply_parse(t_rtsp_info *info, char *buffer, int buflen, int type);
+

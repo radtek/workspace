@@ -30,6 +30,13 @@ typedef enum
 	enum_cmd_teardown = 6
 }enum_rtsp_cmd;
 
+typedef enum 
+{
+	enum_stop_byte_array = 1,
+	enum_stop_rtsp_client = 2,
+	enum_stop_rtsp_server = 3
+}enum_stop_thread_num;
+
 typedef struct 
 {
 	// IP地址
@@ -96,14 +103,27 @@ typedef struct
 
 typedef struct
 {
+	char *buffer;
+	int size;
+	int remain;
+	int head;
+	int tail;
+	pthread_mutex_t lock;
+	pthread_cond_t cond;
+}t_rtp_byte_array;
+
+typedef struct
+{
 	t_device_info *device_info;
 	tcp_conn_info *device_conn;
 	tcp_server_info *rtsp_serv;
 	t_rtsp_info *rtsp_info;
 	t_rtsp_reply_info *reply_info;
+	t_rtp_byte_array *rtp_array;
 
 	// 停止符
 	bool stop;
+	enum_stop_thread_num stop_thread_no;
 	int thread_num;
 	// rtsp_serv lock
 	pthread_mutex_t serv_lock;

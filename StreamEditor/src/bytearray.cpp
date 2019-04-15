@@ -8,170 +8,179 @@
 //	描    述:  
 // =====================================================================================
 
+#include "rtsp_task.h"
 #include "bytearray.h"
+#include "logfile.h"
+#include <sys/socket.h>
+#include <unistd.h>
+#include <stdlib.h>
 
-ByteArray::ByteArray(int len)
+t_rtp_byte_array *rtp_array_create(int size)
 {
-	if(len <= 0)
-	{
-		len = 1024 * 1024;
-	}
-
-#ifdef __GNUC__
-	pthread_mutex_init(&m_mutexLock, NULL);
-	pthread_cond_init(&m_condLock, NULL);
-#else
-	InitializeCriticalSection(&m_csLock);
-	m_hEvent = CreateEvent(NULL, TRUE, TRUE, NULL);
-#endif
-	m_totalLen = len;
-	m_remainLen = len;
-	m_beginPos = 0;
-	m_endPos = 0;
-	m_buffer = new char[m_totalLen];
+	t_rtp_byte_array *rtp_array = new t_rtp_byte_array;
+	rtp_array->buffer = new char[size];
+	rtp_array->size = size;
+	rtp_array->remain = size;
+	rtp_array->head = 0;
+	rtp_array->tail = 0;
+	pthread_mutex_init(&rtp_array->lock, NULL);
+	pthread_cond_init(&rtp_array->cond, NULL);
 }
 
-ByteArray::~ByteArray()
+int get_rtp_buffer(t_rtp_byte_array *rtp_array, unsigned char *buf)
 {
-#ifdef __GNUC__
-	pthread_mutex_destroy(&m_mutexLock);
-	pthread_cond_destroy(&m_condLock);
-#else
-	DeleteCriticalSection(&m_csLock);
-	CloseHandle(m_hEvent);
-#endif
-	if(m_buffer != NULL)
+	int length = -1;
+	if(rtp_array->size - rtp_array->remain > 4)
 	{
-		delete [] m_buffer;
-		m_buffer = NULL;
-	}
-}
-
-bool ByteArray::put_message(char *buffer, int length)
-{
-	bool result = false;
-
-	if(buffer == NULL || length <= 0)
-	{
-		return result;
-	}
-
-#ifdef __GNUC__
-	pthread_mutex_lock(&m_mutexLock);
-#else
-	EnterCriticalSection(&m_csLock);
-#endif
-	if(m_remainLen >= length)
-	{
-		if(length > (m_totalLen - m_endPos))
+		get_byte_array(rtp_array, (char*)buf, 4);
+		if(buf[0] == 0x24 && buf[1] == 0x00)
 		{
-			int len = m_totalLen - m_endPos;
-			memcpy(m_buffer + m_endPos, buffer, len);
-			memcpy(m_buffer, buffer + len, length - len);
-			m_endPos = length - len;
-			m_remainLen -= length;
-		}
-		else
-		{
-			memcpy(m_buffer + m_endPos, buffer, length);
-			m_endPos += length;
-			m_remainLen -= length;
-		}
-		result = true;
-	}
-#ifdef __GNUC__
-	pthread_mutex_unlock(&m_mutexLock);
-	pthread_cond_signal(&m_condLock);
-#else
-	LeaveCriticalSection(&m_csLock);
-	SetEvent(m_hEvent);
-#endif
-	return result;
-}
-
-bool ByteArray::get_message(char *buffer, int length, bool block, bool reserve)
-{
-	bool result = false;
-
-#ifdef __GNUC__
-	if(buffer == NULL || length <= 0)
-	{
-		return result;
-	}
-#else
-	if(length <= 0)
-	{
-		return result;
-	}
-#endif
-
-#ifdef __GNUC__
-	pthread_mutex_lock(&m_mutexLock);
-	if(block)
-	{
-		while(m_totalLen - m_remainLen < length)
-		{
-			pthread_cond_wait(&m_condLock, &m_mutexLock);
-		}
-	}
-#else
-	EnterCriticalSection(&m_csLock);
-	if(block)
-	{
-		while(m_totalLen - m_remainLen < length)
-		{
-			ResetEvent(m_hEvent);
-			LeaveCriticalSection(&m_csLock);
-			WaitForSingleObject(m_hEvent, INFINITE);
-			EnterCriticalSection(&m_csLock);
-		}
-	}
-#endif
-	if(m_totalLen - m_remainLen >= length)
-	{
-		if(length > m_totalLen - m_beginPos)
-		{
-			int len = m_totalLen - m_beginPos;
-			memcpy(buffer, m_buffer + m_beginPos, len);
-			memcpy(buffer + len, m_buffer, length - len);
-			if(!reserve)
+			length = buf[2] * 256 + buf[3];
+			if(length > 2000)
 			{
-				m_beginPos = length - len;
-				m_remainLen += length;
+				char c = 0x24;
+				find_rtp_head(rtp_array, c);
+				length = -1;
+			}
+			else
+			{
+				if(get_byte_array(rtp_array, (char*)(buf + 4), length))
+				{
+					length += 4;
+				}
+				else
+				{
+					length = -1;
+				}
 			}
 		}
 		else
 		{
-			memcpy(buffer, m_buffer + m_beginPos, length);
-			if(!reserve)
-			{
-				m_beginPos += length;
-				m_remainLen += length;
-			}
+			char c = 0x24;
+			find_rtp_head(rtp_array, c);
 		}
-		result = true;
 	}
-#ifdef __GNUC__
-	pthread_mutex_unlock(&m_mutexLock);
-#else
-	LeaveCriticalSection(&m_csLock);
-#endif
-	return result;
+	return length;
 }
 
-void ByteArray::clear_array()
+void find_rtp_head(t_rtp_byte_array *rtp_array, char c)
 {
-#ifdef __GNUC__
-	pthread_mutex_lock(&m_mutexLock);
-	m_remainLen = m_totalLen;
-	m_beginPos = 0;
-	m_endPos = 0;
-	pthread_mutex_unlock(&m_mutexLock);
-#else
-	EnterCriticalSection(&m_csLock);
-	m_remainLen = m_totalLen;
-	m_beginPos = 0;
-	m_endPos = 0;
-	LeaveCriticalSection(&m_csLock);
-#endif
+	pthread_mutex_lock(&rtp_array->lock);
+	int length = rtp_array->size - rtp_array->remain;
+	int pos = rtp_array->head;
+	int i = 0;
+	for(; i < length; i++)
+	{
+		if(rtp_array->buffer[pos % rtp_array->size] == c)
+		{
+			break;
+		}
+	}
+	rtp_array->head = pos;
+	rtp_array->remain += i;
+	pthread_mutex_unlock(&rtp_array->lock);
 }
+
+bool put_byte_array(t_rtp_byte_array *rtp_array, char *buf, int len)
+{
+	pthread_mutex_lock(&rtp_array->lock);
+	if(rtp_array->remain >= len)
+	{
+		rtp_array->remain -= len;
+		if(rtp_array->size - rtp_array->tail >= len)
+		{
+			memcpy(rtp_array->buffer + rtp_array->tail, buf, len);
+			rtp_array->tail += len;
+			pthread_mutex_unlock(&rtp_array->lock);
+		}
+		else
+		{
+			int llen = rtp_array->size - rtp_array->tail - 1;
+			int rlen = len - llen;
+			memcpy(rtp_array->buffer + rtp_array->tail, buf, llen);
+			memcpy(rtp_array->buffer, buf + llen, rlen);
+			rtp_array->tail = rlen;
+			pthread_mutex_unlock(&rtp_array->lock);
+		}
+		return true;
+	}
+	pthread_mutex_unlock(&rtp_array->lock);
+	return false;
+}
+
+bool get_byte_array(t_rtp_byte_array *rtp_array, char *buf, int len)
+{
+	pthread_mutex_lock(&rtp_array->lock);
+	if(rtp_array->size - rtp_array->remain >= len)
+	{
+		if(rtp_array->size - 1 - rtp_array->head >= len)
+		{
+			memcpy(buf, rtp_array->buffer + rtp_array->head, len);
+			rtp_array->head += len;
+			rtp_array->remain += len;
+			pthread_mutex_unlock(&rtp_array->lock);
+		}
+		else
+		{
+			int llen = rtp_array->size - 1 - rtp_array->head;
+			int rlen = len - llen;
+			memcpy(buf, rtp_array->buffer + rtp_array->head, llen);
+			memcpy(buf + llen, rtp_array->buffer, rlen);
+			rtp_array->head = rlen;
+			rtp_array->remain += len;
+			pthread_mutex_unlock(&rtp_array->lock);
+		}
+		return true;
+	}
+	pthread_mutex_unlock(&rtp_array->lock);
+	return false;
+}
+
+void *byte_array_process_start(void *arg)
+{
+	int deviceid = *((int*)arg);
+	log_debug("byte_array_process_start 线程启动, deviceid %d", deviceid);
+	pthread_detach(pthread_self());
+	t_video_play_info *player = video_task_get(deviceid);
+	if(player == NULL)
+	{
+		log_debug("byte_array_process_start 获取 player 失败, deviceid %d, 线程退出", deviceid);
+	}
+	unsigned char buffer[2048];
+	int length = 0;
+	while(true)
+	{
+		if(player->stop)
+		{
+			log_debug("byte_array_process_start 线程准备退出, deviceid %d", deviceid);
+			break;
+		}
+
+		if((length = get_rtp_buffer(player->rtp_array, buffer)) != -1)
+		{
+			if(player->rtsp_serv->clnt_count != 0)
+			{
+				int clnt_count = player->rtsp_serv->clnt_count;
+				for(int i = 0; i < MAX_CLNT_ONLINE; i++)
+				{
+					if(clnt_count == 0)
+					{
+						break;
+					}
+					if(player->rtsp_serv->clnt[i] != NULL)
+					{
+						send(player->rtsp_serv->clnt[i]->sockfd, buffer, length, 0);
+						clnt_count -= 1;
+					}
+				}
+			}
+		}
+		else
+		{
+			sleep(0.01);
+		}
+	}
+	log_debug("byte_array_process_start 线程退出, deviceid %d", deviceid);
+	return NULL;
+}
+
