@@ -36,6 +36,11 @@ void video_play_free(t_video_play_info* &player)
 		delete player->rtsp_serv;
 		player->rtsp_serv = NULL;
 	}
+	if(player->reply_info != NULL)
+	{
+		delete player->reply_info;
+		player->reply_info = NULL;
+	}
 	if(player->device_info != NULL)
 	{
 		delete player->device_info;

@@ -58,10 +58,14 @@ int create_tcp_server(int port)
 
 void *rtsp_server_start(void *arg)
 {
-	log_debug("rtsp_server_start 线程启动");
-	pthread_detach(pthread_self());
 	int deviceid = *((int*)arg);
+	log_debug("rtsp_server_start 线程启动, deviceid %d", deviceid);
+	pthread_detach(pthread_self());
 	t_video_play_info *player = video_task_get(deviceid);
+	if(player == NULL)
+	{
+		log_debug("rtsp_server_start 工作线程获取 player 失败, deviceid %d, 线程退出", deviceid);
+	}
 
 	int maxfd = player->rtsp_serv->sockfd;
 	fd_set fds;
@@ -74,8 +78,9 @@ void *rtsp_server_start(void *arg)
 	{
 		if(player->stop)
 		{
-			log_debug("rtsp_server_start 线程准备退出");
-			video_task_remove(player->device_info->deviceid);
+			log_debug("rtsp_server_start 线程准备退出, deviceid %d", deviceid);
+			close(player->rtsp_serv->sockfd);
+			video_task_remove(deviceid);
 			break;
 		}
 
@@ -192,9 +197,8 @@ void *rtsp_server_start(void *arg)
 	}
 	// 等待10秒钟后,结束线程
 	sleep(10);
-	close(player->rtsp_serv->sockfd);
 	video_play_free(player);
-	log_debug("rtsp_server_start 线程退出");
+	log_debug("rtsp_server_start 线程退出, deviceid %d", deviceid);
 	return NULL;
 }
 
@@ -230,10 +234,14 @@ int recv_rtsp_command(t_video_play_info *player, int sockfd)
 	memset(buffer, 0, MAX_BUF_SIZE);
 	for(int j = 0; j < 3; j++)
 	{
-		buflen = recv(sockfd, buffer, MAX_BUF_SIZE, 0);
-		if(buflen > 0)
+		int len = recv(sockfd, buffer, MAX_BUF_SIZE - buflen, 0);
+		if(len > 0)
 		{
-			break;
+			buflen += len;
+			if(buffer[buflen - 2] == '\r' && buffer[buflen - 1] == '\n')
+			{
+				break;
+			}
 		}
 
 		if((errno != EINTR && errno != EWOULDBLOCK && errno != EAGAIN))
@@ -270,11 +278,10 @@ int recv_rtsp_command(t_video_play_info *player, int sockfd)
 			break;
 	}
 
-	int len = 0;
 	// 发送command数据
 	for(int i = 0; i < 3; i++)
 	{
-		len = send(sockfd, buffer, buflen, 0);
+		int len = send(sockfd, buffer, buflen, 0);
 		if(len > 0)
 		{
 			break;

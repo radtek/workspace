@@ -26,6 +26,9 @@ extern map<unsigned int, t_device_info*> g_mapDeviceInfo;
 extern map<unsigned int, t_video_play_info*> g_mapVideoPlay;
 extern char g_localhost[16];
 
+// 直接向线程传入int地址时,会存在线程内未使用时,变量即被释放的情况,现弄
+map<int, int*> mapDeviceIdPtrKeeper;
+
 mg_serve_http_opts HttpServer::s_server_option;
 std::string HttpServer::s_web_dir = "./web";
 std::unordered_map<std::string, ReqHandler> HttpServer::s_handler_map;
@@ -48,9 +51,24 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 			ret = "bad request";
 			break;
 		}
+
 		int deviceid = root["deviceid"].asInt();
 		int service_port = deviceid % 10000 + 10000;
+		int *deviceid_ptr = NULL;
 		string rtsp_url;
+
+		// 添加到地址表
+		if(mapDeviceIdPtrKeeper[deviceid] == NULL)
+		{
+			deviceid_ptr = new int;
+			*deviceid_ptr = deviceid;
+			mapDeviceIdPtrKeeper[deviceid] = deviceid_ptr;
+		}
+		else
+		{
+			deviceid_ptr = mapDeviceIdPtrKeeper[deviceid];
+		}
+
 
 		if(g_mapVideoPlay.find(deviceid) == g_mapVideoPlay.end())
 		{	// 若不在当前播放列表内
@@ -76,6 +94,35 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 				sprintf(play_info->rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/main/av_stream", 
 						play_info->device_info->ipaddr, play_info->device_info->rtspport);
 
+
+				// 与设备的连接信息
+				play_info->device_conn = create_tcp_client_conn(play_info->device_info->ipaddr, play_info->device_info->rtspport);
+				if(play_info->device_conn == NULL)
+				{
+					// 释放内存, 将stop置为true, 由启动的rtsp_server_start来处理内存释放
+					play_info->stop = true;
+					ret = "connect device failed";
+					log_debug("连接到设备 %d 失败,ip[%s]", deviceid, play_info->device_info->ipaddr);
+					break;
+				}
+
+				if(!rtsp_request(play_info))
+				{
+					// 释放内存, 将stop置为true, 由启动的rtsp_server_start来处理内存释放
+					play_info->stop = true;
+					ret = "rtsp protocol wrong";
+					log_debug("与设备 %d rtsp对接失败,ip[%s]", deviceid, play_info->device_info->ipaddr);
+					break;
+				}
+				else
+				{
+					log_debug("连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, play_info->device_info->ipaddr);
+				}
+
+				// 接收数据
+				pthread_t pid_clnt;
+				pthread_create(&pid_clnt, NULL, rtsp_worker_start, (void*)deviceid_ptr);
+				
 				// rtsp server,开启端口,并等待连接
 				int sockfd = create_tcp_server(service_port);
 				if(sockfd == -1)
@@ -95,39 +142,9 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 				FD_SET(sockfd, &play_info->serv_fds);
 				pthread_mutex_init(&play_info->serv_lock, NULL);
 				pthread_t pid_serv;
-				play_info->thread_num += 1;
-				pthread_create(&pid_serv, NULL, rtsp_server_start, (void*)&deviceid);
-
-				// 与设备的连接信息
-				play_info->device_conn = create_tcp_client_conn(play_info->device_info->ipaddr, play_info->device_info->rtspport);
-				if(play_info->device_conn == NULL)
-				{
-					// 释放内存, 将stop置为true, 由启动的rtsp_server_start来处理内存释放
-					play_info->stop = true;
-					ret = "connect device failed";
-					log_debug("连接到设备 %d 失败,ip[%s]", deviceid, play_info->device_info->ipaddr);
-					break;
-				}
+				pthread_create(&pid_serv, NULL, rtsp_server_start, (void*)deviceid_ptr);
 
 
-				if(!rtsp_request(play_info))
-				{
-					// 释放内存, 将stop置为true, 由启动的rtsp_server_start来处理内存释放
-					play_info->stop = true;
-					ret = "rtsp protocol wrong";
-					log_debug("与设备 %d rtsp对接失败,ip[%s]", deviceid, play_info->device_info->ipaddr);
-					break;
-				}
-				else
-				{
-					log_debug("连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, play_info->device_info->ipaddr);
-				}
-
-				// 接收数据
-				pthread_t pid_clnt;
-				play_info->thread_num += 1;
-				pthread_create(&pid_clnt, NULL, rtsp_worker_start, (void*)&deviceid);
-				
 				// 虚拟地址
 				sprintf(play_info->reply_info->rtsp_url, "rtsp://%s:%d/video/h264/%d", g_localhost, service_port, deviceid);
 				sprintf(play_info->reply_info->video_url, "%s/trackID=1", play_info->reply_info->rtsp_url);
@@ -144,6 +161,7 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 		else
 		{
 			rtsp_url = g_mapVideoPlay[deviceid]->reply_info->rtsp_url;
+			log_debug("返回虚拟rtsp地址: %s", rtsp_url.c_str());
 		}
 		char response[256] = { 0 };
 		sprintf(response, "{\"result\":false, \"message\":\"%s\"}", rtsp_url.c_str());

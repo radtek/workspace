@@ -61,10 +61,14 @@ tcp_conn_info *create_tcp_client_conn(char *ipaddr, int port)
 
 void *rtsp_worker_start(void *arg)
 {
-	log_debug("rtsp_worker_start 线程启动");
-	pthread_detach(pthread_self());
 	int deviceid = *((int*)arg);
+	log_debug("rtsp_worker_start 线程启动, deviceid %d", deviceid);
+	pthread_detach(pthread_self());
 	t_video_play_info *player = video_task_get(deviceid);
+	if(player == NULL)
+	{
+		log_debug("rtsp_worker_start 获取 player 失败, deviceid %d, 线程退出", deviceid);
+	}
 	char buffer[MAX_VIDEO_CACHE] = { 0 };
 	int sockfd = player->device_conn->sockfd;
 
@@ -72,17 +76,15 @@ void *rtsp_worker_start(void *arg)
 	{
 		if(player->stop)
 		{
-			log_debug("rtsp_worker_start 线程准备退出");
+			log_debug("rtsp_worker_start 线程准备退出, deviceid %d", deviceid);
 			break;
 		}
 
 		int n = recv(player->device_conn->sockfd, buffer, MAX_VIDEO_CACHE, 0);
 		if(n > 0)
 		{
-			log_debug("rtsp_worker_start 11111");
 			if(player->rtsp_serv->clnt_count != 0)
 			{
-				log_debug("发送视频");
 				int clnt_count = player->rtsp_serv->clnt_count;
 				for(int i = 0; i < MAX_CLNT_ONLINE; i++)
 				{
@@ -100,13 +102,11 @@ void *rtsp_worker_start(void *arg)
 		}
 		else if(n == 0)
 		{
-			log_debug("rtsp_worker_start 22222");
 			close(sockfd);
 			player->stop = true;
 		}
 		else
 		{
-			log_debug("rtsp_worker_start 33333");
 			if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
 			{
 				continue;
@@ -115,7 +115,7 @@ void *rtsp_worker_start(void *arg)
 			player->stop = true;
 		}
 	}
-	log_debug("rtsp_worker_start 线程退出");
+	log_debug("rtsp_worker_start 线程退出, deviceid %d", deviceid);
 	return NULL;
 }
 
@@ -125,6 +125,7 @@ bool rtsp_request(t_video_play_info *player)
 	{
 		if(!send_rtsp_command(player, i))
 		{
+			log_debug("send rtsp command %d failed", i);
 			log_info(log_queue, "send_rtsp_command %d failed.", i);
 			return false;
 		}
@@ -183,6 +184,10 @@ bool send_rtsp_command(t_video_play_info *player, int type)
 		}
 	}
 
+	log_debug("***************** rtsp send message **************************\n"
+			  "%s", buffer);
+	log_debug("***************** rtsp send msg end **************************\n", buffer);
+
 	// 接收reply数据
 	memset(buffer, 0, MAX_BUF_SIZE);
 	int length = 0;
@@ -203,14 +208,17 @@ bool send_rtsp_command(t_video_play_info *player, int type)
 			return false;
 		}
 	}
+	log_debug("***************** rtsp recv message **************************\n"
+			  "%s", buffer);
+	log_debug("***************** rtsp recv msg end **************************\n", buffer);
 
 	// 处理应答数据
-	rtsp_reply_parse(player->rtsp_info, buffer, length, type);
-	return true;
+	return rtsp_reply_parse(player->rtsp_info, buffer, length, type);
 }
 
 bool rtsp_reply_parse(t_rtsp_info *info, char *buffer, int buflen, int cmd)
 {
+	int result = true;
 	char *buf = new char[buflen - 4 + 1];
 	memset(buf, 0, buflen - 4 + 1);
 	memcpy(buf, buffer, buflen - 4);
@@ -226,6 +234,11 @@ bool rtsp_reply_parse(t_rtsp_info *info, char *buffer, int buflen, int cmd)
 	string *lines = get_part_string(message, "\r\n", line_count);
 	for(int i = 0; i < line_count; i++)
 	{
+		if(result == false)
+		{
+			break;
+		}
+
 		int count = 0;
 		string *parts = get_part_string(lines[i], " ", count);
 		
@@ -241,6 +254,15 @@ bool rtsp_reply_parse(t_rtsp_info *info, char *buffer, int buflen, int cmd)
 					if(strcmp(parts[1].c_str(), "401") == 0)
 					{
 						info->secret = true;
+					}
+					else if(strcmp(parts[1].c_str(), "200") == 0)
+					{
+						result = true;
+					}
+					else
+					{
+						log_debug("rtsp reply parse failed, errno %s\n", parts[1].c_str());
+						result = false;
 					}
 				}
 				else if(strcmp(parts[0].c_str(), "WWW-Authenticate:") == 0)
@@ -373,6 +395,6 @@ bool rtsp_reply_parse(t_rtsp_info *info, char *buffer, int buflen, int cmd)
 		delete [] lines;
 		lines = NULL;
 	}
-	return true;
+	return result;
 }
 
