@@ -19,20 +19,26 @@ t_rtp_byte_array *rtp_array_create(int size)
 {
 	t_rtp_byte_array *rtp_array = new t_rtp_byte_array;
 	rtp_array->buffer = new char[size];
+	memset(rtp_array->buffer, 0, size);
 	rtp_array->size = size;
 	rtp_array->remain = size;
 	rtp_array->head = 0;
 	rtp_array->tail = 0;
 	pthread_mutex_init(&rtp_array->lock, NULL);
 	pthread_cond_init(&rtp_array->cond, NULL);
+	return rtp_array;
 }
 
-int get_rtp_buffer(t_rtp_byte_array *rtp_array, unsigned char *buf)
+int get_rtp_buffer(t_rtp_byte_array* &rtp_array, unsigned char *buf)
 {
 	int length = -1;
 	if(rtp_array->size - rtp_array->remain > 4)
 	{
 		get_byte_array(rtp_array, (char*)buf, 4);
+		length = buf[2] * 256 + buf[3];
+		get_byte_array(rtp_array, (char*)buf + 4, length);
+
+		/*
 		if(buf[0] == 0x24 && buf[1] == 0x00)
 		{
 			length = buf[2] * 256 + buf[3];
@@ -59,6 +65,7 @@ int get_rtp_buffer(t_rtp_byte_array *rtp_array, unsigned char *buf)
 			char c = 0x24;
 			find_rtp_head(rtp_array, c);
 		}
+		*/
 	}
 	return length;
 }
@@ -81,7 +88,7 @@ void find_rtp_head(t_rtp_byte_array *rtp_array, char c)
 	pthread_mutex_unlock(&rtp_array->lock);
 }
 
-bool put_byte_array(t_rtp_byte_array *rtp_array, char *buf, int len)
+bool put_byte_array(t_rtp_byte_array* &rtp_array, char *buf, int len)
 {
 	pthread_mutex_lock(&rtp_array->lock);
 	if(rtp_array->remain >= len)
@@ -108,7 +115,7 @@ bool put_byte_array(t_rtp_byte_array *rtp_array, char *buf, int len)
 	return false;
 }
 
-bool get_byte_array(t_rtp_byte_array *rtp_array, char *buf, int len)
+bool get_byte_array(t_rtp_byte_array* &rtp_array, char *buf, int len)
 {
 	pthread_mutex_lock(&rtp_array->lock);
 	if(rtp_array->size - rtp_array->remain >= len)
@@ -146,7 +153,7 @@ void *byte_array_process_start(void *arg)
 	{
 		log_debug("byte_array_process_start 获取 player 失败, deviceid %d, 线程退出", deviceid);
 	}
-	unsigned char buffer[2048];
+	unsigned char buffer[255 * 255];
 	int length = 0;
 	while(true)
 	{
@@ -156,8 +163,18 @@ void *byte_array_process_start(void *arg)
 			break;
 		}
 
-		if((length = get_rtp_buffer(player->rtp_array, buffer)) != -1)
-		{
+//		if((length = get_rtp_buffer(player->rtp_array, buffer)) != -1)
+//		{
+			// 打印转发的数据
+
+			if(player->rtp_array->size - player->rtp_array->remain > 4)
+			{
+				get_byte_array(player->rtp_array, (char*)buffer, 4);
+				length = buffer[2] * 256 + buffer[3];
+				get_byte_array(player->rtp_array, (char*)buffer + 4, length);
+				cout << "获取到数据 " << length << endl;
+			}
+			/*
 			if(player->rtsp_serv->clnt_count != 0)
 			{
 				int clnt_count = player->rtsp_serv->clnt_count;
@@ -174,11 +191,12 @@ void *byte_array_process_start(void *arg)
 					}
 				}
 			}
-		}
-		else
-		{
-			sleep(0.01);
-		}
+			*/
+//		}
+//		else
+//		{
+//			sleep(0.01);
+//		}
 	}
 	log_debug("byte_array_process_start 线程退出, deviceid %d", deviceid);
 	return NULL;

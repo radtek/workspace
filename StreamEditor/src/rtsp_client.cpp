@@ -36,6 +36,13 @@ tcp_conn_info *create_tcp_client_conn(char *ipaddr, int port)
 			break;
 		}
 
+		int recv_buf_size = 32 * 1024;
+		if(setsockopt(clnt->sockfd, SOL_SOCKET, SO_RCVBUF, (char*)&recv_buf_size, sizeof(int)))
+		{
+			log_info(log_queue, "%s[%05d]: setsockopt() failed.", __FILE__, __LINE__);
+			break;
+		}
+
 		struct sockaddr_in sock_addr;
 		memset(&sock_addr, 0, sizeof(sock_addr));
 		sock_addr.sin_family = AF_INET;
@@ -51,6 +58,7 @@ tcp_conn_info *create_tcp_client_conn(char *ipaddr, int port)
 		return clnt;
 	}while(0);
 	
+	log_debug("create_tcp_client_conn() failed");
 	if(clnt != NULL)
 	{
 		delete clnt;
@@ -201,8 +209,6 @@ bool send_rtsp_command(t_video_play_info *player, int type)
 	// 处理应答数据
 	return rtsp_reply_parse(player->rtsp_info, buffer, length, type);
 }
-
-
 
 bool rtsp_reply_parse(t_rtsp_info *info, char *buffer, int buflen, int cmd)
 {

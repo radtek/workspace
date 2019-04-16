@@ -12,6 +12,7 @@
 #include <memory>
 using namespace std;
 #include <time.h>
+#include "functions.h"
 #include "rtsp_struct.h"
 #include "rtsp_client.h"
 #include "rtsp_server.h"
@@ -75,6 +76,7 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 			map<unsigned int, t_device_info*>::iterator iter = g_mapDeviceInfo.find(deviceid);
 			if(iter != g_mapDeviceInfo.end())
 			{	// 添加到播放列表
+				log_debug("添加到播放列表, deviceid %d", deviceid);
 				video_task_add(deviceid);
 				t_video_play_info *play_info = video_task_get(deviceid);
 				if(play_info == NULL)
@@ -83,10 +85,12 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 				}
 
 				// 设备基础信息
+				log_debug("获取设备基础信息, deviceid %d", deviceid);
 				play_info->device_info = new t_device_info;
 				memcpy(play_info->device_info, iter->second, sizeof(t_device_info));
 
 				// rtsp连接信息
+				log_debug("获取rtsp连接地址, deviceid %d", deviceid);
 				play_info->rtsp_info = new t_rtsp_info;
 				memset(play_info->rtsp_info, 0, sizeof(t_rtsp_info));
 				memcpy(play_info->rtsp_info->username, play_info->device_info->username, 32);
@@ -106,6 +110,7 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 					log_debug("端口号 %d 启动失败,端口号或已占用", play_info->rtsp_serv->port);
 					break;
 				}
+				log_debug("端口 %d 启动成功, deviceid %d", deviceid);
 				play_info->rtsp_serv = new tcp_server_info;
 				memset(play_info->rtsp_serv, 0, sizeof(tcp_server_info));
 				play_info->rtsp_serv->port = service_port;
@@ -118,10 +123,11 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 
 				// 创建解析队列
 				play_info->rtp_array = rtp_array_create(1024 * 1024);
-				pthread_t pid;
-				pthread_create(&pid, NULL, byte_array_process_start, (void*)deviceid_ptr);
+				pthread_t byte_process_pid;
+				pthread_create(&byte_process_pid, NULL, byte_array_process_start, (void*)deviceid_ptr);
 
 				// 与设备的连接信息
+				log_debug("建立到设备的rtsp连接, deviceid %d", deviceid);
 				play_info->device_conn = create_tcp_client_conn(play_info->device_info->ipaddr, play_info->device_info->rtspport);
 				if(play_info->device_conn == NULL)
 				{
@@ -140,10 +146,7 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 					log_debug("与设备 %d rtsp对接失败,ip[%s]", deviceid, play_info->device_info->ipaddr);
 					break;
 				}
-				else
-				{
-					log_debug("连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, play_info->device_info->ipaddr);
-				}
+				log_debug("连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, play_info->device_info->ipaddr);
 
 				// 接收数据
 				pthread_t pid_clnt;

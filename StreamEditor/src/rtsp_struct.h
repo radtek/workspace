@@ -17,7 +17,7 @@ using namespace std;
 
 #define MAX_BUF_SIZE (2048)
 #define MAX_CLNT_ONLINE (32)
-#define MAX_VIDEO_CACHE (10240)
+#define MAX_VIDEO_CACHE (1024 * 16)
 
 typedef enum 
 {
