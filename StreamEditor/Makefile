@@ -3,7 +3,7 @@ library_dir = -L /usr/lib/oracle/11.2/client64/lib
 include_dir = -I /usr/include/oracle/11.2/client64
 libs = -lpthread -levent_core -levent_extra -levent -lociei -lclntsh -lnnz11
 objs = main.o logfile.o functions.o rtsp_protocol.o rtsp_client.o md5.o rtsp_server.o http_handle.o http_server.o mongoose.o bytearray.o otl_control.o json_value.o \
-		json_reader.o json_writer.o rtsp_task.o
+		json_reader.o json_writer.o rtsp_task.o threadpool.o
 exe = stream
 c_flags = -g -std=c++11
 
@@ -42,6 +42,8 @@ json_writer.o:src/jsoncpp/json/writer.h
 	$(cc) -c $(c_flags) src/jsoncpp/json_writer.cpp
 json_value.o:src/jsoncpp/json/value.h
 	$(cc) -c $(c_flags) src/jsoncpp/json_value.cpp
+threadpool.o:src/threadpool.h
+	$(cc) -c $(c_flags) src/threadpool.cpp
 
 
 .PHONY:clean

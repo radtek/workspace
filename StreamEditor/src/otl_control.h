@@ -11,13 +11,24 @@
 #ifndef _OTL_CONTROL_H_H_H
 #define _OTL_CONTROL_H_H_H
 
-#include "rtsp_struct.h"
 #include <string>
 #include <map>
 using namespace std;
 #include <pthread.h>
 #define OTL_ORA11G_R2
 #include "otlv4.h"
+
+typedef struct
+{
+	char crossname[64];
+	char username[32];
+	char password[32];
+	char ipaddr[16];
+	int port;
+	int deviceid;
+	int devicetype;
+	int rtspport;
+}t_device_info;
 
 string get_otl_conn(char *username, char *password, char *ipaddr, char *port, char *dbname);
 string get_otl_conn(char *username, char *password, char *dbname);

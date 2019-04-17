@@ -99,29 +99,8 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 				sprintf(play_info->rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/main/av_stream", 
 						play_info->device_info->ipaddr, play_info->device_info->rtspport);
 
-				// rtsp server,开启端口,并等待连接
-				int sockfd = create_tcp_server(service_port);
-				if(sockfd == -1)
-				{
-					// 释放内存
-					play_info->stop = true;
-					video_task_remove(deviceid);
-					video_play_free(play_info);
-					ret = "create server failed";
-					log_debug("端口号 %d 启动失败,端口号或已占用", play_info->rtsp_serv->port);
-					break;
-				}
-				log_debug("端口 %d 启动成功, deviceid %d", deviceid);
-				play_info->rtsp_serv = new tcp_server_info;
-				memset(play_info->rtsp_serv, 0, sizeof(tcp_server_info));
-				play_info->rtsp_serv->port = service_port;
-				play_info->rtsp_serv->sockfd = sockfd;
-				FD_ZERO(&play_info->serv_fds);
-				FD_SET(sockfd, &play_info->serv_fds);
-				pthread_mutex_init(&play_info->serv_lock, NULL);
-				pthread_t pid_serv;
-				pthread_create(&pid_serv, NULL, rtsp_server_start, (void*)deviceid_ptr);
-
+				
+								
 				// 创建解析队列
 				play_info->rtp_array = rtp_array_create(1024 * 1024);
 				pthread_t byte_process_pid;

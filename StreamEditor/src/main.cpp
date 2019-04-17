@@ -28,9 +28,11 @@ bool get_device_info();
 int main(int argc, char *argv[])
 {
 	memset(g_localhost, 0, 16);
-	char port[8] = { 0 };
+	char http_service_port[8] = { 0 };
+	char video_service_port[8] = { 0 };
 	GetConfigureString("local.ipaddr", g_localhost, 16, "127.0.0.1", CONFFILE);
-	GetConfigureString("http.Service", port, 8, "8000", CONFFILE);
+	GetConfigureString("http.service.port", http_service_port, 8, "8000", CONFFILE);
+	GetConfigureString("rtsp.service.port", rtsp_service_port, 8, "8001", CONFFILE);
 
 	start_log_thread();
 	sleep(1);
@@ -39,6 +41,28 @@ int main(int argc, char *argv[])
 	{
 		return EXIT_FAILURE;
 	}
+
+	int sockfd = create_tcp_server(service_port);
+	if(sockfd == -1)
+	{
+		// 释放内存
+		play_info->stop = true;
+		video_task_remove(deviceid);
+		video_play_free(play_info);
+		ret = "create server failed";
+		log_debug("端口号 %d 启动失败,端口号或已占用", play_info->rtsp_serv->port);
+		break;
+	}
+				log_debug("端口 %d 启动成功, deviceid %d", deviceid);
+				play_info->rtsp_serv = new tcp_server_info;
+				memset(play_info->rtsp_serv, 0, sizeof(tcp_server_info));
+				play_info->rtsp_serv->port = service_port;
+				play_info->rtsp_serv->sockfd = sockfd;
+				FD_ZERO(&play_info->serv_fds);
+				FD_SET(sockfd, &play_info->serv_fds);
+				pthread_mutex_init(&play_info->serv_lock, NULL);
+	pthread_t pid;
+	pthread_create(ptid, NULL, rtsp_worker_start, (void*)video_service_port);
 
 	std::string httpport = port;
 	auto http_server = std::shared_ptr<HttpServer>(new HttpServer);

@@ -11,24 +11,29 @@
 #ifndef __BYTEARRAY_H_H_H
 #define __BYTEARRAY_H_H_H
 
-#include "rtsp_struct.h"
 #include <iostream>
 using namespace std;
 #include <string.h>
 #include <pthread.h>
 
+typedef struct
+{
+	char *buffer;
+	int size;
+	int total;
+	int head;
+	int tail;
+	bool stop;
+	pthread_mutex_t lock;
+	pthread_cond_t cond;
+}t_byte_array;
+
 // 创建对象, 10M
-t_rtp_byte_array *rtp_array_create(int size = 1024 * 1024 * 10);
-// 主线程
-void *byte_array_process_start(void *arg);
-// 取出完整rtp数据包
-int get_rtp_buffer(t_rtp_byte_array* &rtp_array, unsigned char *buf);
+t_byte_array *create_byte_array(int size = 1024 * 1024 * 10);
 // 放进队列
-bool put_byte_array(t_rtp_byte_array* &rtp_array, char *buf, int len);
+bool put_byte_array(t_byte_array* &byte_array, char *buf, int len);
 // 要取出的长度
-bool get_byte_array(t_rtp_byte_array* &rtp_array, char *buf, int len);
-// 停止服务
-void byte_array_process_stop(t_rtp_byte_array* &rtp_array);
+bool get_byte_array(t_byte_array* &byte_array, char *buf, int len);
 
 #endif
 

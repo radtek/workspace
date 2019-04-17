@@ -16,6 +16,20 @@
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
 
+typedef struct
+{
+	// 开辟的端口号
+	int port;
+	// 服务端套接字
+	int sockfd;
+	// 无连接时间,单位:秒, 60秒无连接则关闭服务端口
+	int time_count;
+	// 
+	int clnt_count;
+	// 最大支持32个用户同时访问
+	tcp_conn_info *clnt[MAX_CLNT_ONLINE];
+}tcp_server_info;
+
 // 返回套接字
 int create_tcp_server(int port);
 // 服务端工作线程, 处理rtsp请求

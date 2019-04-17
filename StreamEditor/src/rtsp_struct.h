@@ -50,32 +50,6 @@ typedef struct
 
 typedef struct
 {
-	// 开辟的端口号
-	int port;
-	// 服务端套接字
-	int sockfd;
-	// 无连接时间,单位:秒, 60秒无连接则关闭服务端口
-	int time_count;
-	// 
-	int clnt_count;
-	// 最大支持32个用户同时访问
-	tcp_conn_info *clnt[MAX_CLNT_ONLINE];
-}tcp_server_info;
-
-typedef struct
-{
-	char crossname[64];
-	char username[32];
-	char password[32];
-	char ipaddr[16];
-	int port;
-	int deviceid;
-	int devicetype;
-	int rtspport;
-}t_device_info;
-
-typedef struct
-{
 	char rtsp_url[128];
 	char video_url[128];
 	char audio_url[128];
@@ -101,18 +75,6 @@ typedef struct
 	char ssrc[2][16];
 	char transport[64];
 }t_rtsp_reply_info;
-
-typedef struct
-{
-	char *buffer;
-	int size;
-	int total;
-	int head;
-	int tail;
-	bool stop;
-	pthread_mutex_t lock;
-	pthread_cond_t cond;
-}t_rtp_byte_array;
 
 typedef struct
 {
