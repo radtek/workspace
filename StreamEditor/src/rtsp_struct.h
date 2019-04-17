@@ -18,6 +18,7 @@ using namespace std;
 #define MAX_BUF_SIZE (2048)
 #define MAX_CLNT_ONLINE (32)
 #define MAX_VIDEO_CACHE (1024 * 16)
+#define MAX_SERVICE_WAIT_TIME (30)
 
 typedef enum 
 {
@@ -105,9 +106,10 @@ typedef struct
 {
 	char *buffer;
 	int size;
-	int remain;
+	int total;
 	int head;
 	int tail;
+	bool stop;
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
 }t_rtp_byte_array;

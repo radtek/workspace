@@ -231,6 +231,8 @@ void BaseServer::StartWeb(int port)
 	{
 		FD_ZERO(&tempsets);
 		tempsets = m_setWebSock;
+		timeout.tv_sec = 5;
+		timeout.tv_usec = 0;
 		result = select(m_iWebMaxSock+1,&tempsets,NULL,NULL,&timeout);
 		if(result > 0)
 		{

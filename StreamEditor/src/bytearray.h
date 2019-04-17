@@ -17,16 +17,18 @@ using namespace std;
 #include <string.h>
 #include <pthread.h>
 
-// 创建对象
-t_rtp_byte_array *rtp_array_create(int size = 1024 * 1024);
+// 创建对象, 10M
+t_rtp_byte_array *rtp_array_create(int size = 1024 * 1024 * 10);
+// 主线程
+void *byte_array_process_start(void *arg);
 // 取出完整rtp数据包
 int get_rtp_buffer(t_rtp_byte_array* &rtp_array, unsigned char *buf);
 // 放进队列
 bool put_byte_array(t_rtp_byte_array* &rtp_array, char *buf, int len);
 // 要取出的长度
 bool get_byte_array(t_rtp_byte_array* &rtp_array, char *buf, int len);
-// 查找包头
-void find_rtp_head(t_rtp_byte_array *rtp_array, char c);
-void *byte_array_process_start(void *arg);
+// 停止服务
+void byte_array_process_stop(t_rtp_byte_array* &rtp_array);
 
 #endif
+

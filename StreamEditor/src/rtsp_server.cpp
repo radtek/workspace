@@ -87,12 +87,12 @@ void *rtsp_server_start(void *arg)
 		if(player->rtsp_serv->clnt_count == 0)
 		{
 			player->rtsp_serv->time_count += 5;
-			if(player->rtsp_serv->time_count >= 300)
+			if(player->rtsp_serv->time_count >= MAX_SERVICE_WAIT_TIME)
 			{
 				player->stop = true;
 				log_info(log_queue, "%s 长时间无连接, 停止任务", player->rtsp_info->rtsp_url);
 				log_debug("%s 长时间无连接,停止任务", player->rtsp_info->rtsp_url);
-				break;
+				continue;
 			}
 		}
 

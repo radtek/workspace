@@ -10,6 +10,7 @@
 
 #include <iostream>
 #include <memory>
+#include <map>
 using namespace std;
 #include <time.h>
 #include "functions.h"
@@ -60,11 +61,11 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 		string rtsp_url;
 
 		// 添加到地址表
-		if(mapDeviceIdPtrKeeper[deviceid] == NULL)
+		if(mapDeviceIdPtrKeeper.find(deviceid) == mapDeviceIdPtrKeeper.end())
 		{
 			deviceid_ptr = new int;
 			*deviceid_ptr = deviceid;
-			mapDeviceIdPtrKeeper[deviceid] = deviceid_ptr;
+			mapDeviceIdPtrKeeper.insert(pair<int, int*>(deviceid, deviceid_ptr));
 		}
 		else
 		{
@@ -171,7 +172,7 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 			log_debug("返回虚拟rtsp地址: %s", rtsp_url.c_str());
 		}
 		char response[256] = { 0 };
-		sprintf(response, "{\"result\":false, \"message\":\"%s\"}", rtsp_url.c_str());
+		sprintf(response, "{\"result\":true, \"message\":\"%s\"}", rtsp_url.c_str());
 		rsp_callback(c, response);
 		return true;
 	}while(0);

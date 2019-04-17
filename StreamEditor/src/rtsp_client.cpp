@@ -36,7 +36,7 @@ tcp_conn_info *create_tcp_client_conn(char *ipaddr, int port)
 			break;
 		}
 
-		int recv_buf_size = 32 * 1024;
+		int recv_buf_size = 1024 * 1024 * 10;
 		if(setsockopt(clnt->sockfd, SOL_SOCKET, SO_RCVBUF, (char*)&recv_buf_size, sizeof(int)))
 		{
 			log_info(log_queue, "%s[%05d]: setsockopt() failed.", __FILE__, __LINE__);
@@ -86,6 +86,7 @@ void *rtsp_worker_start(void *arg)
 		if(player->stop)
 		{
 			log_debug("rtsp_worker_start 线程准备退出, deviceid %d", deviceid);
+			player->rtp_array->stop = true;
 			break;
 		}
 

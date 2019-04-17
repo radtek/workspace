@@ -12,6 +12,7 @@
 #include <map>
 using namespace std;
 #include <unistd.h>
+#include "logfile.h"
 #include "rtsp_struct.h"
 
 // 当前播放列表,deviceid为key
@@ -96,10 +97,16 @@ void video_task_remove(int deviceid)
 	iter = g_mapVideoPlay.find(deviceid);
 	if(iter != g_mapVideoPlay.end())
 	{
-		t_video_play_info *player = iter->second;
 		g_mapVideoPlay.erase(iter);
 	}
 	pthread_mutex_unlock(&g_mapVideoLock);
+
+	/*
+	if(g_mapVideoPlay.find(deviceid) == g_mapVideoPlay.end())
+		log_debug("草泥马，傻逼找不到了吧");
+	else
+		log_debug("草泥马，为什么还能找到");
+	*/
 }
 
 t_video_play_info *video_task_get(int deviceid)
