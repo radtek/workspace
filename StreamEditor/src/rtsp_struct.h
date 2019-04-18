@@ -26,19 +26,10 @@ typedef enum
 {
 	enum_cmd_options = 0,
 	enum_cmd_describe = 1,
-	enum_cmd_describe_secret = 2,
-	enum_cmd_setup_video = 3,
-	enum_cmd_setup_audio = 4,
-	enum_cmd_play = 5,
-	enum_cmd_teardown = 6
+	enum_cmd_setup = 2,
+	enum_cmd_play = 3,
+	enum_cmd_teardown = 4
 }enum_rtsp_cmd;
-
-typedef enum 
-{
-	enum_stop_byte_array = 1,
-	enum_stop_rtsp_client = 2,
-	enum_stop_rtsp_server = 3
-}enum_stop_thread_num;
 
 typedef struct 
 {

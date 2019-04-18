@@ -25,8 +25,6 @@ tcp_server_info *create_tcp_server(char *localip, char *port);
 void free_tcp_server(tcp_server_info* &info);
 // rtsp应答
 void rtsp_response(void *arg);
-// 接收rtsp
-int recv_rtsp_command(t_device_video_play *player, int sockfd);
 
 #endif
 

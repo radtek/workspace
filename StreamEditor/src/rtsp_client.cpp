@@ -8,10 +8,9 @@
 //	描    述:  
 // =====================================================================================
 
-#include "rtsp_task.h"
 #include "rtsp_client.h"
+#include "rtsp_util.h"
 #include "rtsp_protocol.h"
-#include "bytearray.h"
 #include "logfile.h"
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -58,97 +57,112 @@ int connect_server(char *ipaddr, int port)
 
 bool rtsp_request(t_device_video_play *player)
 {
-	for(int i = 0; i < 6; i++)
-	{
-		if(!send_rtsp_command(player, i))
-		{
-			log_debug("send rtsp command %d failed", i);
-			log_info(log_queue, "send_rtsp_command %d failed.", i);
-			return false;
-		}
-	}
-	
-	memcpy(player->vir_rtsp_info->session, player->dev_rtsp_info->session, 64);
-	memcpy(player->vir_rtsp_info->ssrc[0], player->dev_rtsp_info->ssrc[0], 16);
-	memcpy(player->vir_rtsp_info->ssrc[1], player->dev_rtsp_info->ssrc[1], 16);
-	memcpy(player->vir_rtsp_info->username, player->dev_rtsp_info->username, 32);
-	memcpy(player->vir_rtsp_info->password, player->dev_rtsp_info->password, 32);
-	memcpy(player->vir_rtsp_info->nonce, player->dev_rtsp_info->nonce, 64);
-	memcpy(player->vir_rtsp_info->realm, player->dev_rtsp_info->nonce, 64);
-	return true;
-}
+	memset(player->dev_rtsp_info->video_url, 0, 128);
+	memset(player->dev_rtsp_info->audio_url, 0, 128);
+	memset(player->dev_rtsp_info->session, 0, 64);
+	memset(player->dev_rtsp_info->nonce, 0, 64);
+	memset(player->dev_rtsp_info->realm, 0, 32);
+	player->dev_rtsp_info->cmd_seq = 0;
+	player->dev_rtsp_info->secret = false;
+	player->dev_rtsp_info->step = enum_cmd_options;
+	player->dev_rtsp_info->counter = 0;
 
-bool send_rtsp_command(t_device_video_play *player, int type)
-{
 	char buffer[MAX_BUF_SIZE] = { 0 };
-	int buflen = 0;
-	switch(type)
-	{
-		case enum_cmd_options:
-			buflen = rtsp_cmd_options(player->dev_rtsp_info, buffer);
-			break;
-		case enum_cmd_describe:
-			buflen = rtsp_cmd_describe(player->dev_rtsp_info, buffer);
-			break;
-		case enum_cmd_describe_secret:
-			buflen = rtsp_cmd_describe(player->dev_rtsp_info, buffer);
-			break;
-		case enum_cmd_setup_video:
-			buflen = rtsp_cmd_setup(player->dev_rtsp_info, buffer, 1);
-			break;
-		case enum_cmd_setup_audio:
-			buflen = rtsp_cmd_setup(player->dev_rtsp_info, buffer, 2);
-			break;
-		case enum_cmd_play:
-			buflen = rtsp_cmd_play(player->dev_rtsp_info, buffer);
-			break;
-		case enum_cmd_teardown:
-			buflen = rtsp_cmd_teardown(player->dev_rtsp_info, buffer);
-			break;
-		default:
-			break;
-	}
-
-	// 发送command数据
-	for(int i = 0; i < 3; i++)
-	{
-		int n = send(player->sockfd, buffer, buflen, 0);
-		if(n > 0)
-		{
-			break;
-		}
-
-		if((errno != EINTR && errno != EWOULDBLOCK && errno != EAGAIN))
-		{
-			log_debug("device send rtsp message error, %d", n);
-			return false;
-		}
-	}
-
-	// 接收reply数据
-	memset(buffer, 0, MAX_BUF_SIZE);
 	int length = 0;
-	for(int j = 0; j < 3; j++)
+	int result = 0;
+	while(true)
 	{
-		int n = recv(player->sockfd, buffer + length, MAX_BUF_SIZE - length, 0);
-		if(n > 0)
+		memset(buffer, 0, MAX_BUF_SIZE);
+		switch(player->dev_rtsp_info->step)
 		{
-			length += n;
-			if(buffer[n - 2] == '\r' && buffer[n - 1] == '\n')
+			case enum_cmd_options:
+				length = rtsp_cmd_options(player->dev_rtsp_info, buffer);
+				break;
+			case enum_cmd_describe:
+				length = rtsp_cmd_describe(player->dev_rtsp_info, buffer);
+				break;
+			case enum_cmd_setup:
+				length = rtsp_cmd_setup(player->dev_rtsp_info, buffer);
+				break;
+			case enum_cmd_play:
+				length = rtsp_cmd_play(player->dev_rtsp_info, buffer);
+				break;
+			default:
+				length = -1;
+				break;
+		}
+		if(length == -1)
+		{
+			result = -1;
+			break;
+		}
+
+		int n = send_rtsp_message(player->socket, buffer, length);
+		memset(buffer, 0, MAX_BUF_SIZE);
+		length = recv_rtsp_message(player->socket, buffer, MAX_BUF_SIZE);
+
+		switch(player->dev_rtsp_info->step)
+		{
+			case enum_cmd_options:
+				result = rtsp_cmd_options(player->dev_rtsp_info, buffer);
+				break;
+			case enum_cmd_describe:
+				result = rtsp_cmd_describe(player->dev_rtsp_info, buffer);
+				break;
+			case enum_cmd_setup:
+				result = rtsp_cmd_setup(player->dev_rtsp_info, buffer);
+				break;
+			case enum_cmd_play:
+				result = rtsp_cmd_play(player->dev_rtsp_info, buffer);
+				break;
+			default:
+				result = -1;
+				break;
+		}
+
+		// result为1时,握手结束
+		if(result == 0)
+		{
+			if(player->dev_rtsp_info->step == enum_cmd_setup &&
+				player->dev_rtsp_info->counter == 0)
+			{
+				player->dev_rtsp_info->step -= 1;
+			}
+			else
+			{
+				player->dev_rtsp_info->step += 1;
+			}
+		}
+		else if(result == 1)
+		{
+			if(player->dev_rtsp_info->step == enum_cmd_describe)
+			{
+				player->dev_rtsp_info->step -= 1;
+			}
+			else
 			{
 				break;
 			}
 		}
-
-		if((errno != EINTR && errno != EWOULDBLOCK && errno != EAGAIN))
+		else
 		{
-			log_debug("device recv rtsp message error, %d", n);
-			return false;
+			log_debug("client send rtsp message error, message:\n"
+					"%s\n", buffer);
+			break;
 		}
 	}
-
-	// 处理应答数据
-	return rtsp_reply_parse(player->dev_rtsp_info, buffer, length, type);
+	
+	if(result == 1)
+	{
+		memcpy(player->vir_rtsp_info->session, player->dev_rtsp_info->session, 64);
+		memcpy(player->vir_rtsp_info->ssrc[0], player->dev_rtsp_info->ssrc[0], 16);
+		memcpy(player->vir_rtsp_info->ssrc[1], player->dev_rtsp_info->ssrc[1], 16);
+		memcpy(player->vir_rtsp_info->username, player->dev_rtsp_info->username, 32);
+		memcpy(player->vir_rtsp_info->password, player->dev_rtsp_info->password, 32);
+		memcpy(player->vir_rtsp_info->nonce, player->dev_rtsp_info->nonce, 64);
+		memcpy(player->vir_rtsp_info->realm, player->dev_rtsp_info->nonce, 64);
+		return true;
+	}
+	return false;
 }
-
 

@@ -92,12 +92,24 @@ void rtsp_response(void *arg)
 	int sockfd = *((int*)arg);
 
 	char buffer[MAX_BUF_SIZE] = { 0 };
-	recv_rtsp_message(sockfd, buffer, MAX_BUF_SIZE);
-
-	t_device_video_play *player = video_task_get(0);
+	int length = 0;
+	length = recv_rtsp_message(sockfd, buffer, MAX_BUF_SIZE);
+	if(length == -1)
+	{
+		close(sockfd);
+	}
+	int deviceid = rtsp_parse_cmd_options(buffer);
+	t_device_video_play *player = video_task_get(deviceid);
 	if(player == NULL)
 	{
+		close(sockfd);
+		log_debug("no this deviceid %d", deviceid);
+		return;
 	}
+	memset(buffer, 0, MAX_BUF_SIZE);
+	length = rtsp_reply_options(player->vir_rtsp_info, buffer);
+	send_rtsp_message(sockfd, buffer, length);
+
 	while(true)
 	{
 		int n = recv_rtsp_command(player, sockfd);

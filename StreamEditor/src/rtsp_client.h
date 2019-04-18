@@ -14,6 +14,4 @@
 int connect_server(char *ipaddr, int port);
 // 发送rtsp视频流请求
 bool rtsp_request(t_device_video_play *player);
-// 封装send rtsp command的系列操作
-bool send_rtsp_command(t_device_video_play *player, int type);
 

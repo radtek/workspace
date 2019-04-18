@@ -33,7 +33,8 @@ int rtsp_cmd_describe(t_rtsp_info *info, char *buffer)
 						"CSeq: %d\r\n"
 						"Authorization: Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"
 						"\r\n", 
-						info->rtsp_url, ++info->cmd_seq, info->username, info->realm, info->nonce, info->rtsp_url, response.c_str());
+						info->rtsp_url, ++info->cmd_seq, info->username, info->realm, 
+						info->nonce, info->rtsp_url, response.c_str());
 	}
 	else
 	{
@@ -43,18 +44,18 @@ int rtsp_cmd_describe(t_rtsp_info *info, char *buffer)
 	return strlen(buffer);
 }
 
-int rtsp_cmd_setup(t_rtsp_info *info, char *buffer, int type)
+int rtsp_cmd_setup(t_rtsp_info *info, char *buffer)
 {
 	if(info->secret)
 	{
 		string url;
 		string interleaved;
-		if(type == 1)
+		if(info->counter == 0)
 		{
 			url = info->video_url;
 			interleaved = "0-1";
 		}
-		else
+		else if(info->counter == 1)
 		{
 			url = info->audio_url;
 			interleaved = "2-3";
@@ -102,99 +103,6 @@ int rtsp_cmd_play(t_rtsp_info *info, char *buffer)
 int rtsp_cmd_teardown(t_rtsp_info *info, char *buffer)
 {
 	log_info(log_queue, "Send Command Message: \n%s", buffer);
-	return strlen(buffer);
-}
-
-/* ***************************************************************************************************************** */
-int rtsp_reply_options(t_rtsp_info *info, char *buffer)
-{
-	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
-					"CSeq: %d\r\n"
-					"Public: OPTIONS, DESCRIBE, PLAY, PAUSE, SETUP, TEARDOWN\r\n"
-					"\r\n", info->cmd_seq);
-	return strlen(buffer);
-}
-
-int rtsp_reply_describe(t_rtsp_info *info, char *buffer)
-{
-	char context[1024] = { 0 };
-	sprintf(context,"v=0\r\n"
-					"o=- 1553788149189586 1553788149189586 IN IP4 %s\r\n"
-					"s=Media Presentation\r\n"
-					"e=NONE\r\n"
-					"b=AS:5100\r\n"
-					"t=0 0\r\n"
-					"a=control:%s/\r\n"
-					"m=video 0 RTP/AVP 96\r\n"
-					"c=IN IP4 0.0.0.0\r\n"
-					"b=AS:5000\r\n"
-					"a=recvonly\r\n"
-					"a=x-dimensions:2048,1536\r\n"
-					"a=control:%s\r\n"
-					"a=rtpmap:96 H264/90000\r\n"
-					"a=fmtp:96 profile-level-id=420029; packetization-mode=1; sprop-parameter-sets=Z2QAMqwXKgCAAwaEAAAcIAAFfkIQ,aP44sA==\r\n"
-					"m=audio 0 RTP/AVP 8\r\n"
-					"c=IN IP4 0.0.0.0\r\n"
-					"b=AS:50\r\n"
-					"a=recvonly\r\n"
-					"a=control:%s\r\n"
-					"a=rtpmap:8 PCMA/8000\r\n"
-					"a=Media_header:MEDIAINFO=494D4B48010100000400000111710110401F000000FA000000000000000000000000000000000000; a=appversion:1.0\r\n"
-					"\r\n",
-					info->ipaddr, info->rtsp_url, info->video_url, info->audio_url);
-
-	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
-			"CSeq: %d\r\n"
-			"Content-Type: application/sdp\r\n"
-			"Content-Base: %s/\r\n"
-			"Content-Length: %d\r\n"
-			"\r\n"
-			"%s", info->cmd_seq, info->rtsp_url, strlen(context), context);
-			 
-	return strlen(buffer);
-}
-
-int rtsp_reply_setup(t_rtsp_info *info, char *buffer, int type)
-{
-	string interleaved;
-	string ssrc;
-	if(type == 1)
-	{
-		interleaved = "0-1";
-		ssrc = info->ssrc[0];
-	}
-	else
-	{
-		interleaved = "2-3";
-		ssrc = info->ssrc[1];
-	}
-	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
-					"CSeq: %d\r\n"
-					"Session:       %s;timeout=60\r\n"
-					"Transport: %s;ssrc=%s;mode=\"play\"\r\n"
-					"\r\n",
-					info->cmd_seq, info->session, info->transport, interleaved.c_str(), ssrc.c_str());
-	return strlen(buffer);
-}
-
-int rtsp_reply_play(t_rtsp_info *info, char *buffer)
-{
-	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
-					"CSeq: %d\r\n"
-					"Session:       %s\r\n"
-					"RTP-Info: url=%s/trackID=1;seq=32174;rtptime=296066432,"
-							  "url=%s/trackID=2;seq=64348;rtptime=26317072\r\n"
-					"\r\n",
-					info->cmd_seq, info->session, info->rtsp_url, info->rtsp_url);
-	return strlen(buffer);
-}
-
-int rtsp_reply_teardown(t_rtsp_info *info, char *buffer)
-{
-	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
-					"CSeq: 1\r\n"
-					"Public: OPTIONS, DESCRIBE, PLAY, PAUSE, SETUP, TEARDOWN\r\n"
-					"\r\n");
 	return strlen(buffer);
 }
 
@@ -259,6 +167,7 @@ int rtsp_parse_reply_describe(t_rtsp_info *info, char *buffer, int buflen)
 			else if(strcmp(strNodes[1].c_str(), "401") == 0)
 			{
 				info->secret = true;
+				ret = 1;
 			}
 			else
 			{
@@ -304,6 +213,7 @@ int rtsp_parse_reply_describe(t_rtsp_info *info, char *buffer, int buflen)
 				}
 				else if(strcmp(strNodes[0].c_str(), "m=video") == 0)
 				{
+					info->chanel += 1;
 					for(; i < nLineCount; i++)
 					{
 						if(strncmp(strLines[i].c_str(), "a=control:", 10) == 0)
@@ -320,6 +230,7 @@ int rtsp_parse_reply_describe(t_rtsp_info *info, char *buffer, int buflen)
 				}
 				else if(strcmp(strNodes[0].c_str(), "m=audio") == 0)
 				{
+					info->chanel += 1;
 					for(; i < nLineCount; i++)
 					{
 						if(strncmp(strLines[i].c_str(), "a=control:", 10) == 0)
@@ -409,7 +320,14 @@ int rtsp_parse_reply_setup(t_rtsp_info *info, char *buffer, int buflen)
 					{
 						if(strcmp(args[0].c_str(), "ssrc") == 0)
 						{
-							memcpy(info->ssrc[0], args[1].c_str(), args[1].length());
+							if(counter == 0)
+							{
+								memcpy(info->ssrc[0], args[1].c_str(), args[1].length());
+							}
+							else
+							{
+								memcpy(info->ssrc[1], args[1].c_str(), args[1].length());
+							}
 						}
 					}
 					if(args != NULL)
@@ -502,6 +420,99 @@ int rtsp_parse_reply_teardown(t_rtsp_info *info, char *buffer, int buflen)
 		strLines = NULL;
 	}
 	return ret;
+}
+
+/* ***************************************************************************************************************** */
+int rtsp_reply_options(t_rtsp_info *info, char *buffer)
+{
+	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
+					"CSeq: %d\r\n"
+					"Public: OPTIONS, DESCRIBE, PLAY, PAUSE, SETUP, TEARDOWN\r\n"
+					"\r\n", info->cmd_seq);
+	return strlen(buffer);
+}
+
+int rtsp_reply_describe(t_rtsp_info *info, char *buffer)
+{
+	char context[1024] = { 0 };
+	sprintf(context,"v=0\r\n"
+					"o=- 1553788149189586 1553788149189586 IN IP4 %s\r\n"
+					"s=Media Presentation\r\n"
+					"e=NONE\r\n"
+					"b=AS:5100\r\n"
+					"t=0 0\r\n"
+					"a=control:%s/\r\n"
+					"m=video 0 RTP/AVP 96\r\n"
+					"c=IN IP4 0.0.0.0\r\n"
+					"b=AS:5000\r\n"
+					"a=recvonly\r\n"
+					"a=x-dimensions:2048,1536\r\n"
+					"a=control:%s\r\n"
+					"a=rtpmap:96 H264/90000\r\n"
+					"a=fmtp:96 profile-level-id=420029; packetization-mode=1; sprop-parameter-sets=Z2QAMqwXKgCAAwaEAAAcIAAFfkIQ,aP44sA==\r\n"
+					"m=audio 0 RTP/AVP 8\r\n"
+					"c=IN IP4 0.0.0.0\r\n"
+					"b=AS:50\r\n"
+					"a=recvonly\r\n"
+					"a=control:%s\r\n"
+					"a=rtpmap:8 PCMA/8000\r\n"
+					"a=Media_header:MEDIAINFO=494D4B48010100000400000111710110401F000000FA000000000000000000000000000000000000; a=appversion:1.0\r\n"
+					"\r\n",
+					info->ipaddr, info->rtsp_url, info->video_url, info->audio_url);
+
+	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
+			"CSeq: %d\r\n"
+			"Content-Type: application/sdp\r\n"
+			"Content-Base: %s/\r\n"
+			"Content-Length: %d\r\n"
+			"\r\n"
+			"%s", info->cmd_seq, info->rtsp_url, strlen(context), context);
+			 
+	return strlen(buffer);
+}
+
+int rtsp_reply_setup(t_rtsp_info *info, char *buffer)
+{
+	string interleaved;
+	string ssrc;
+	if(inf->counter == 0)
+	{
+		interleaved = "0-1";
+		ssrc = info->ssrc[0];
+	}
+	else
+	{
+		interleaved = "2-3";
+		ssrc = info->ssrc[1];
+	}
+	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
+					"CSeq: %d\r\n"
+					"Session:     %s;timeout=60\r\n"
+					"Transport: %s;ssrc=%s;mode=\"play\"\r\n"
+					"\r\n",
+					info->cmd_seq, info->session, info->transport, interleaved.c_str(), ssrc.c_str());
+	return strlen(buffer);
+}
+
+int rtsp_reply_play(t_rtsp_info *info, char *buffer)
+{
+	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
+					"CSeq: %d\r\n"
+					"Session:       %s\r\n"
+					"RTP-Info: url=%s/trackID=1;seq=32174;rtptime=296066432,"
+							  "url=%s/trackID=2;seq=64348;rtptime=26317072\r\n"
+					"\r\n",
+					info->cmd_seq, info->session, info->rtsp_url, info->rtsp_url);
+	return strlen(buffer);
+}
+
+int rtsp_reply_teardown(t_rtsp_info *info, char *buffer)
+{
+	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
+					"CSeq: 1\r\n"
+					"Public: OPTIONS, DESCRIBE, PLAY, PAUSE, SETUP, TEARDOWN\r\n"
+					"\r\n");
+	return strlen(buffer);
 }
 
 /* ***************************************************************************************************************** */
@@ -671,7 +682,7 @@ int rtsp_parse_cmd_setup(t_rtsp_info *info, char *buffer, int buflen)
 
 int rtsp_parse_cmd_play(t_rtsp_info *info, char *buffer, int buflen)
 {
-	int ret = 0;
+	int ret = 1;
 	string message = buffer;
 	int nLineCount = 0;
 	string *strLines = get_part_string(message, "\r\n", nLineCount);
@@ -775,3 +786,57 @@ int rtsp_parse_cmd_teardown(t_rtsp_info *info, char *buffer, int buflen)
 	return ret;
 }
 
+/* ***************************************************************************************************************** */
+int rtsp_parse_cmd_options(char *buffer)
+{
+	int ret = 0;
+	string message = buffer;
+	int nLineCount = 0;
+	string *strLines = get_part_string(message, "\r\n", nLineCount);
+	do{
+		if(strLines == NULL || nLineCount <= 0)
+		{
+			ret = -1;
+			break;
+		}
+
+		int nNodeCount = 0;
+		string *strNodes = get_part_string(strLines[0], " ", nNodeCount);
+		if(strcmp(strNodes[0].c_str(), "OPTIONS") != 0)
+		{
+			ret = -1;
+		}
+		if(strNodes != NULL)
+		{
+			delete [] strNodes;
+			strNodes = NULL;
+		}
+		if(ret == -1)
+		{
+			break;
+		}
+
+		for(int i = 1; i < nLineCount; i++)
+		{
+			int nNodeCount = 0;
+			string *strNodes = get_part_string(strLines[i], " ", nNodeCount);
+			if(strcmp(strNodes[0].c_str(), "CSeq:") == 0)
+			{
+				info->cmd_seq = atoi(strNodes[1].c_str());
+			}
+			if(strNodes != NULL)
+			{
+				delete [] strNodes;
+				strNodes = NULL;
+			}
+		}
+	}while(0);
+
+	if(strLines != NULL)
+	{
+		delete [] strLines;
+		strLines = NULL;
+	}
+	return ret;
+
+}

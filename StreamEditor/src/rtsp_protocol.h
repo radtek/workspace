@@ -30,6 +30,12 @@ typedef struct
 	char ipaddr[16];
 	int cmd_seq;
 	bool secret;
+	// 当前阶段
+	enum_rtsp_cmd step;
+	// 通道数量
+	int chanel;
+	// 协议阶段计数
+	int counter;
 }t_rtsp_info;
 
 // rtsp请求组包
@@ -39,13 +45,6 @@ int rtsp_cmd_setup(t_rtsp_info *info, char *buffer);
 int rtsp_cmd_play(t_rtsp_info *info, char *buffer);
 int rtsp_cmd_teardown(t_rtsp_info *info, char *buffer);
 
-// rtsp应答组包
-int rtsp_reply_options(t_rtsp_info *info, char *buffer);
-int rtsp_reply_describe(t_rtsp_info *info, char *buffer);
-int rtsp_reply_setup(t_rtsp_info *info, char *buffer);
-int rtsp_reply_play(t_rtsp_info *info, char *buffer);
-int rtsp_reply_teardown(t_rtsp_info *info, char *buffer);
-
 // rtsp应答解析, 返回解析结果
 int rtsp_parse_reply_options(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_reply_describe(t_rtsp_info *info, char *buffer, int buflen);
@@ -53,12 +52,22 @@ int rtsp_parse_reply_setup(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_reply_play(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_reply_teardown(t_rtsp_info *info, char *buffer, int buflen);
 
+// rtsp应答组包
+int rtsp_reply_options(t_rtsp_info *info, char *buffer);
+int rtsp_reply_describe(t_rtsp_info *info, char *buffer);
+int rtsp_reply_setup(t_rtsp_info *info, char *buffer);
+int rtsp_reply_play(t_rtsp_info *info, char *buffer);
+int rtsp_reply_teardown(t_rtsp_info *info, char *buffer);
+
 // rtsp请求解析, 返回解析结果
 int rtsp_parse_cmd_options(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_cmd_describe(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_cmd_setup(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_cmd_play(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_cmd_teardown(t_rtsp_info *info, char *buffer, int buflen);
+
+// 定制解析接口,返回设备id
+int rtsp_parse_cmd_options(char *buffer);
 
 #endif
 
