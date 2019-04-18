@@ -12,59 +12,75 @@
 #include <memory>
 using namespace std;
 
+#include "threadpool.h"
 #include "functions.h"
 #include "logfile.h"
-#include "otl_control.h"
-#include "rtsp_struct.h"
+#include "otlcontrol.h"
+#include "rtsp_server.h"
+#include "rtsp_task.h"
 #include "http_handle.h"
 
-LOG_QUEUE *log_queue = NULL;
-// 设备信息,deviceid为key
-extern map<unsigned int, t_device_info*> g_mapDeviceInfo;
-char g_localhost[16];
+#define THREAD_NUM (10)
+#define THREAD_TASK_NUM (1024)
 
-bool get_device_info();
+map<unsigned int, t_device_video_play*> g_mapDeviceVideoPlay;
+LOG_QUEUE *log_queue = NULL;
+tcp_server_info *g_rtsp_serv;
 
 int main(int argc, char *argv[])
 {
-	memset(g_localhost, 0, 16);
-	char http_service_port[8] = { 0 };
-	char video_service_port[8] = { 0 };
-	GetConfigureString("local.ipaddr", g_localhost, 16, "127.0.0.1", CONFFILE);
-	GetConfigureString("http.service.port", http_service_port, 8, "8000", CONFFILE);
-	GetConfigureString("rtsp.service.port", rtsp_service_port, 8, "8001", CONFFILE);
+	char localhost[16] = { 0 };
+	char http_port[8] = { 0 };
+	char rtsp_port[8] = { 0 };
+	GetConfigureString("local.ipaddr", localhost, 16, "127.0.0.1", CONFFILE);
+	GetConfigureString("http.service.port", http_port, 8, "8000", CONFFILE);
+	GetConfigureString("rtsp.service.port", rtsp_port, 8, "8001", CONFFILE);
 
+	// 启动日志线程
 	start_log_thread();
-	sleep(1);
 	log_queue = create_log_queue("rtsp_logs");
+
+	// 获取设备信息
 	if(!get_device_info())
 	{
 		return EXIT_FAILURE;
 	}
 
-	int sockfd = create_tcp_server(service_port);
-	if(sockfd == -1)
+	// 启动rtsp服务
+	g_rtsp_serv = create_tcp_server(localhost, rtsp_port);
+	if(g_rtsp_serv == NULL)
 	{
-		// 释放内存
-		play_info->stop = true;
-		video_task_remove(deviceid);
-		video_play_free(play_info);
-		ret = "create server failed";
-		log_debug("端口号 %d 启动失败,端口号或已占用", play_info->rtsp_serv->port);
-		break;
+		log_debug("rtsp服务端口 %s ", rtsp_port);
+		return EXIT_FAILURE;
 	}
-				log_debug("端口 %d 启动成功, deviceid %d", deviceid);
-				play_info->rtsp_serv = new tcp_server_info;
-				memset(play_info->rtsp_serv, 0, sizeof(tcp_server_info));
-				play_info->rtsp_serv->port = service_port;
-				play_info->rtsp_serv->sockfd = sockfd;
-				FD_ZERO(&play_info->serv_fds);
-				FD_SET(sockfd, &play_info->serv_fds);
-				pthread_mutex_init(&play_info->serv_lock, NULL);
+	else
+	{
+		log_debug("rtsp server port[%s] start success.", rtsp_port);
+		// 设备最大限制数量
+		int max_count = (g_mapDeviceVideoPlay.size() >= MAX_DEVICE_COUNT) ? MAX_DEVICE_COUNT : g_mapDeviceVideoPlay.size();
+		map<unsigned int, t_device_video_play*>::iterator iter = g_mapDeviceVideoPlay.begin();
+		for(int i = 0; i < max_count; i++)
+		{
+			g_rtsp_serv->device[i]->deviceid = iter->second->device_info->deviceid;
+			iter->second->serv_pos = i;
+			sprintf(iter->second->vir_rtsp_info->rtsp_url, "rtsp://%s:%d/video/h264/%d", 
+					g_rtsp_serv->ipaddr, g_rtsp_serv->port, iter->second->device_info->deviceid);
+			sprintf(iter->second->vir_rtsp_info->video_url, "%s/trackID=1", iter->second->vir_rtsp_info->rtsp_url);
+			sprintf(iter->second->vir_rtsp_info->audio_url, "%s/trackID=2", iter->second->vir_rtsp_info->rtsp_url);
+			sprintf(iter->second->dev_rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/main/av_stream", 
+					iter->second->device_info->ipaddr, iter->second->device_info->port);
+			iter++;
+		}
+	}
 	pthread_t pid;
-	pthread_create(ptid, NULL, rtsp_worker_start, (void*)video_service_port);
+	pthread_create(&pid, NULL, rtsp_server_start, NULL);
 
-	std::string httpport = port;
+	// 开启线程池
+	threadpool_start(THREAD_NUM, THREAD_TASK_NUM);
+	log_debug("线程池启动完成, 线程数 %d, 最大任务数 %d", THREAD_NUM, THREAD_TASK_NUM);
+
+	// 开启http端口
+	std::string httpport = http_port;
 	auto http_server = std::shared_ptr<HttpServer>(new HttpServer);
 	http_server->Init(httpport);
 	http_server->AddHandler("/rtsp/describe", handle_describe);
@@ -74,49 +90,4 @@ int main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-bool get_device_info()
-{
-	do{
-		char ora_ip[16] = { 0 };
-		char ora_port[8] = { 0 };
-		char ora_user[32] = { 0 };
-		char ora_pwd[32] = { 0 };
-		char ora_name[16] = { 0 };
-		GetConfigureString("oracle.ipaddr", ora_ip, 16, "127.0.0.1", CONFFILE);
-		GetConfigureString("oracle.port", ora_port, 8, "1521", CONFFILE);
-		GetConfigureString("oracle.username", ora_user, 32, "EHL_VIPS", CONFFILE);
-		GetConfigureString("oracle.password", ora_pwd, 32, "ehl1234", CONFFILE);
-		GetConfigureString("oracle.name", ora_name, 16, "RACDB", CONFFILE);
-		
-		string str = get_otl_conn(ora_user, ora_pwd, ora_ip, ora_port, ora_name);
-		if(!database_open(str.c_str()))
-		{
-			log_info(log_queue, "connect oracle failed.");
-			cout << str.c_str() << endl;
-			log_debug("数据库连接失败, 程序退出, [%s]", str.c_str());
-			break;
-		}
-
-		if(!select_device_info(g_mapDeviceInfo))
-		{
-			log_info(log_queue, "get device info failed.");
-			log_debug("获取设备信息失败, 程序退出");
-			break;
-		}
-		else
-		{
-			map<unsigned int, t_device_info*>::iterator iter;
-			log_debug("获取设备信息成功");
-			for(iter = g_mapDeviceInfo.begin(); iter != g_mapDeviceInfo.end(); iter++)
-			{
-				log_debug("DeviceID: %10d, DeviceType: %.1d, IP: %15s, Username: %8s, Password: %12s",
-						iter->second->deviceid, iter->second->devicetype, iter->second->ipaddr,
-						iter->second->username, iter->second->password);
-			}
-		}
-		database_close();
-		return true;
-	}while(0);
-	return false;
-}
 

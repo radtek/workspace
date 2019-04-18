@@ -84,36 +84,6 @@ void GetConfigureString(string value_name, char * value_buf, unsigned int strlen
 	}
 }
 
-string *get_part_string(string msg, string separator, int &count)
-{
-	list<string> list_str;
-	int pos = 0;
-
-	while(true)
-	{
-		int n = msg.find(separator, pos);
-		string str = msg.substr(pos, n - pos);
-		if(str != "")
-		{
-			list_str.push_back(str);
-			count += 1;
-		}
-		if(n == -1)
-		{
-			break;
-		}
-		pos = n + separator.length();
-	}
-	string *strs = new string[count];
-	list<string>::iterator iter;
-	int i = 0;
-	for(iter = list_str.begin(); iter != list_str.end(); iter++)
-	{
-		strs[i++] = (*iter);
-	}
-	return strs;
-}
-
 string ParseMessageHex(const char *src, unsigned int srclen)
 {
 	if(src == NULL || srclen < 0)

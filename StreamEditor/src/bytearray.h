@@ -11,9 +11,6 @@
 #ifndef __BYTEARRAY_H_H_H
 #define __BYTEARRAY_H_H_H
 
-#include <iostream>
-using namespace std;
-#include <string.h>
 #include <pthread.h>
 
 typedef struct
@@ -31,9 +28,11 @@ typedef struct
 // 创建对象, 10M
 t_byte_array *create_byte_array(int size = 1024 * 1024 * 10);
 // 放进队列
-bool put_byte_array(t_byte_array* &byte_array, char *buf, int len);
+int put_byte_array(t_byte_array *byte_array, const char *buf, int len);
 // 要取出的长度
-bool get_byte_array(t_byte_array* &byte_array, char *buf, int len);
+int get_byte_array(t_byte_array *byte_array, char *buf, int len);
+// 
+void free_byte_array(t_byte_array* &byte_array);
 
 #endif
 

@@ -8,118 +8,338 @@
 //	描    述:  
 // =====================================================================================
 
-#include <iostream>
 #include <map>
 using namespace std;
-#include <unistd.h>
+#include "functions.h"
 #include "logfile.h"
-#include "rtsp_struct.h"
+#include "rtsp_task.h"
+#include "rtsp_client.h"
+#include "rtsp_server.h"
+#include "rtsp_protocol.h"
+#include "threadpool.h"
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <pthread.h>
+#include <errno.h>
 
-// 当前播放列表,deviceid为key
-map<unsigned int, t_video_play_info*> g_mapVideoPlay;
-// 互斥锁
-pthread_mutex_t g_mapVideoLock = PTHREAD_MUTEX_INITIALIZER;
+extern map<unsigned int, t_device_video_play*> g_mapDeviceVideoPlay;
+extern LOG_QUEUE *log_queue;
+extern tcp_server_info *g_rtsp_serv;
 
-void video_play_free(t_video_play_info* &player)
+bool get_device_info()
 {
-	if(player->rtsp_serv != NULL)
-	{
-		for(int i = 0; i < MAX_CLNT_ONLINE; i++)
+	do{
+		char ora_ip[16] = { 0 };
+		char ora_port[8] = { 0 };
+		char ora_user[32] = { 0 };
+		char ora_pwd[32] = { 0 };
+		char ora_name[16] = { 0 };
+		GetConfigureString("oracle.ipaddr", ora_ip, 16, "127.0.0.1", CONFFILE);
+		GetConfigureString("oracle.port", ora_port, 8, "1521", CONFFILE);
+		GetConfigureString("oracle.username", ora_user, 32, "EHL_VIPS", CONFFILE);
+		GetConfigureString("oracle.password", ora_pwd, 32, "ehl1234", CONFFILE);
+		GetConfigureString("oracle.name", ora_name, 16, "RACDB", CONFFILE);
+		
+		t_db_conn *conn = create_otl_conn_oracle(ora_user, ora_pwd, ora_name, ora_ip, ora_port);
+		if(database_open(conn) == -1)
 		{
-			if(player->rtsp_serv->clnt[i] != NULL)
+			log_info(log_queue, "connect oracle failed.");
+			log_debug("数据库连接失败, 程序退出, [%s]", conn->conn_str);
+			break;
+		}
+
+		if(!select_device_info(conn))
+		{
+			log_info(log_queue, "get device info failed.");
+			log_debug("获取设备信息失败, 程序退出");
+			break;
+		}
+		else
+		{
+			map<unsigned int, t_device_video_play*>::iterator iter;
+			log_debug("获取设备信息成功");
+			for(iter = g_mapDeviceVideoPlay.begin(); iter != g_mapDeviceVideoPlay.end(); iter++)
 			{
-				close(player->rtsp_serv->clnt[i]->sockfd);
-				delete player->rtsp_serv->clnt[i];
-				player->rtsp_serv->clnt[i] = NULL;
+				log_debug("DeviceID: %10d, DeviceType: %.1d, IP: %15s, Username: %8s, Password: %12s",
+						iter->second->device_info->deviceid, iter->second->device_info->devicetype, iter->second->device_info->ipaddr,
+						iter->second->device_info->username, iter->second->device_info->password);
 			}
 		}
-		delete player->rtsp_serv;
-		player->rtsp_serv = NULL;
-	}
-	if(player->rtp_array != NULL)
+		database_close(conn);
+		return true;
+	}while(0);
+	return false;
+}
+
+bool select_device_info(t_db_conn *conn)
+{
+	string sql = "select videodeviceid, devicename, devicetype,deviceip,deviceport,reguser,regpwd from T_TVMS_DEVICE order by videodeviceid";
+	try
 	{
-		pthread_mutex_destroy(&player->rtp_array->lock);
-		pthread_cond_destroy(&player->rtp_array->cond);
-		if(player->rtp_array->buffer != NULL)
+		otl_stream select(1, sql.c_str(), conn->conn);
+		int count = 0;
+		while(!select.eof())
 		{
-			delete [] player->rtp_array->buffer;
-			player->rtp_array->buffer = NULL;
+			if(count > MAX_DEVICE_COUNT)
+			{
+				log_debug("超过最大设备数限制, 取前 %d 个设备.", MAX_DEVICE_COUNT);
+				break;
+			}
+
+			t_device_video_play *player = (t_device_video_play*)malloc(sizeof(t_device_video_play));
+			player->device_info = (t_device_info*)malloc(sizeof(t_device_info));
+			memset(player->device_info, 0, sizeof(t_device_info));
+			player->dev_rtsp_info = (t_rtsp_info*)malloc(sizeof(t_rtsp_info));
+			memset(player->dev_rtsp_info, 0, sizeof(t_rtsp_info));
+			player->vir_rtsp_info = (t_rtsp_info*)malloc(sizeof(t_rtsp_info));
+			memset(player->vir_rtsp_info, 0, sizeof(t_rtsp_info));
+			player->rtp_array = create_byte_array(1024 * 1024 * 16);
+			player->stop = true;
+			pthread_mutex_init(&player->lock, NULL);
+
+			select >> player->device_info->deviceid;
+			select >> player->device_info->crossname;
+			select >> player->device_info->devicetype;
+			select >> player->device_info->ipaddr;
+			select >> player->device_info->port;
+			select >> player->device_info->username;
+			select >> player->device_info->password;
+			player->device_info->rtspport = 554;
+			g_mapDeviceVideoPlay[player->device_info->deviceid] = player;
+			count += 1;
 		}
-		delete player->rtp_array;
-		player->rtp_array = NULL;
+		select.close();
 	}
-	if(player->reply_info != NULL)
+	catch(otl_exception &p)
 	{
-		delete player->reply_info;
-		player->reply_info = NULL;
+		return false;
 	}
-	if(player->device_info != NULL)
-	{
-		delete player->device_info;
-		player->device_info = NULL;
-	}
-	if(player->rtsp_info != NULL)
-	{
-		delete player->rtsp_info;
-		player->rtsp_info = NULL;
-	}
-	if(player->device_conn != NULL)
-	{
-		delete player->device_conn;
-		player->device_conn = NULL;
-	}
-	pthread_mutex_destroy(&player->serv_lock);
-	if(player != NULL)
-	{
-		delete player;
-		player = NULL;
-	}
+	return true;
 }
 
-void video_task_add(int deviceid)
+void video_play_free(t_device_video_play* &player)
 {
-	pthread_mutex_lock(&g_mapVideoLock);
-	t_video_play_info *player = new t_video_play_info;
-	player->device_info = NULL;
-	player->device_conn = NULL;
-	player->rtsp_serv = NULL;
-	player->rtsp_info = NULL;
-	player->rtp_array = NULL;
-	player->stop = false;
-	g_mapVideoPlay[deviceid] = player;
-	pthread_mutex_unlock(&g_mapVideoLock);
 }
 
-void video_task_remove(int deviceid)
+t_device_video_play *video_task_get(int deviceid)
 {
-	pthread_mutex_lock(&g_mapVideoLock);
-	map<unsigned int, t_video_play_info*>::iterator iter;
-	iter = g_mapVideoPlay.find(deviceid);
-	if(iter != g_mapVideoPlay.end())
-	{
-		g_mapVideoPlay.erase(iter);
-	}
-	pthread_mutex_unlock(&g_mapVideoLock);
-
-	/*
-	if(g_mapVideoPlay.find(deviceid) == g_mapVideoPlay.end())
-		log_debug("草泥马，傻逼找不到了吧");
-	else
-		log_debug("草泥马，为什么还能找到");
-	*/
-}
-
-t_video_play_info *video_task_get(int deviceid)
-{
-	t_video_play_info *player = NULL;
-	pthread_mutex_lock(&g_mapVideoLock);
-	map<unsigned int, t_video_play_info*>::iterator iter;
-	iter = g_mapVideoPlay.find(deviceid);
-	if(iter != g_mapVideoPlay.end())
+	t_device_video_play *player = NULL;
+	map<unsigned int, t_device_video_play*>::iterator iter;
+	iter = g_mapDeviceVideoPlay.find(deviceid);
+	if(iter != g_mapDeviceVideoPlay.end())
 	{
 		player = iter->second;
+		return player;
 	}
-	pthread_mutex_unlock(&g_mapVideoLock);
-	return player;
+	return NULL;
+}
+
+int get_rtp_buffer(t_byte_array* &rtp_array, unsigned char *buf)
+{
+	int length = -1;
+	if(get_byte_array(rtp_array, (char*)buf, 4))
+	{
+		length = buf[2] * 256 + buf[3];
+		while(true)
+		{
+			if(get_byte_array(rtp_array, (char*)buf + 4, length))
+			{
+				break;
+			}
+			sleep(0.01);
+		}
+		length += 4;
+	}
+	return length;
+}
+
+void *rtsp_worker_start(void *arg)
+{
+	int deviceid = *((int*)arg);
+	log_debug("rtsp_worker_start 线程启动, deviceid %d", deviceid);
+	pthread_detach(pthread_self());
+	t_device_video_play *player = video_task_get(deviceid);
+	if(player == NULL)
+	{
+		log_debug("rtsp_worker_start 获取 player 失败, deviceid %d, 线程退出", deviceid);
+		return NULL;
+	}
+
+	char buffer[MAX_VIDEO_CACHE] = { 0 };
+
+	while(true)
+	{
+		if(player->stop)
+		{
+			log_debug("rtsp_worker_start 线程准备退出, deviceid %d", deviceid);
+			break;
+		}
+
+		int n = recv(player->sockfd, buffer, MAX_VIDEO_CACHE, 0);
+		if(n > 0)
+		{
+			put_byte_array(player->rtp_array, buffer, n);
+		}
+		else if(n == 0)
+		{
+			close(player->sockfd);
+			player->stop = true;
+		}
+		else
+		{
+			if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+			{
+				continue;
+			}
+			close(player->sockfd);
+			player->stop = true;
+		}
+	}
+	log_debug("rtsp_worker_start 线程退出, deviceid %d", deviceid);
+	return NULL;
+}
+
+void *rtsp_server_start(void *arg)
+{
+	log_debug("rtsp_server_start 线程启动");
+	pthread_detach(pthread_self());
+
+	fd_set fds;
+	int result = 0;
+	int maxfd = g_rtsp_serv->sockfd;
+	struct timeval timeout;
+	char buffer[MAX_BUF_SIZE] = { 0 };
+
+	while(true)
+	{
+		for(int i = 0; i < g_rtsp_serv->device_count; i++)
+		{
+			if(g_rtsp_serv->device[i]->clnt_count == 0 && !g_rtsp_serv->device[i]->stop)
+			{
+				g_rtsp_serv->device[i]->time_count += 5;
+				if(g_rtsp_serv->device[i]->time_count >= MAX_SERVICE_WAIT_TIME)
+				{
+					g_rtsp_serv->device[i]->stop = true;
+					int deviceid = g_rtsp_serv->device[i]->deviceid;
+					t_device_video_play *player = video_task_get(deviceid);
+					player->stop = true;
+					log_info(log_queue, "%s 长时间无连接, 停止任务", player->vir_rtsp_info->rtsp_url);
+					log_debug("%s 长时间无连接,停止任务", player->vir_rtsp_info->rtsp_url);
+				}
+			}
+		}
+		
+		timeout.tv_sec = 5;
+		timeout.tv_usec = 0;
+		fds = g_rtsp_serv->fds;
+		result = select(maxfd + 1, &fds, NULL, NULL, &timeout);
+		if(result > 0)
+		{
+			if(FD_ISSET(g_rtsp_serv->sockfd, &fds))
+			{
+				struct sockaddr_in clnt_addr;
+				memset(&clnt_addr, 0, sizeof(clnt_addr));
+				socklen_t clnt_addr_size = sizeof(clnt_addr);
+				int sockfd = accept(g_rtsp_serv->sockfd, (sockaddr*)&clnt_addr, &clnt_addr_size);
+				if(sockfd > 0)
+				{
+					tcp_client_info *clnt = (tcp_client_info*)malloc(sizeof(tcp_client_info));
+					memset(clnt, 0, sizeof(tcp_client_info));
+					memcpy(clnt->ipaddr, inet_ntoa(clnt_addr.sin_addr), 16);
+					clnt->sockfd = sockfd;
+					t_threadpool_task *task = create_threadpool_task();
+					task->callback = &rtsp_response;
+					task->arg = (void *)clnt;
+					threadpool_add_task(task);
+				}
+				result -= 1;
+			}
+
+			for(int i = 0; i < g_rtsp_serv->device_count; i++)
+			{
+				if(result == 0)
+				{
+					continue;
+				}
+
+				if(!g_rtsp_serv->device[i]->stop)
+				{
+					for(int j = 0; j < g_rtsp_serv->device[i]->clnt_count; j++)
+					{
+						if(FD_ISSET(g_rtsp_serv->device[i]->clnt[j].sockfd, &fds))
+						{
+							int n = recv(g_rtsp_serv->device[i]->clnt[j].sockfd, buffer, MAX_BUF_SIZE, 0);
+							if(n <= 0)
+							{
+								pthread_mutex_lock(&g_rtsp_serv->lock);
+								int count = g_rtsp_serv->device[i]->clnt_count;
+								FD_CLR(g_rtsp_serv->device[i]->clnt[j].sockfd, &g_rtsp_serv->fds);
+								close(g_rtsp_serv->device[i]->clnt[j].sockfd);
+								memcpy(&g_rtsp_serv->device[i]->clnt[j], &g_rtsp_serv->device[i]->clnt[count - 1], sizeof(tcp_client_info));
+								g_rtsp_serv->device[i]->clnt_count -= 1;
+								pthread_mutex_unlock(&g_rtsp_serv->lock);
+								j -= 1;
+							}
+						}
+					}
+				}
+			}
+
+			for(int i = 0; i < MAX_CLNT_ONLINE; i++)
+			{
+				if(result == 0)
+				{
+					continue;
+				}
+			}
+		}
+	}
+	log_debug("rtsp_server_start 线程退出");
+	return NULL;
+}
+
+void *byte_array_process_start(void *arg)
+{
+	int deviceid = *((int*)arg);
+	log_debug("byte_array_process_start 线程启动, deviceid %d", deviceid);
+	pthread_detach(pthread_self());
+	t_device_video_play *player = video_task_get(deviceid);
+	if(player == NULL)
+	{
+		log_debug("byte_array_process_start 获取 player 失败, deviceid %d, 线程退出", deviceid);
+		pthread_exit(NULL);
+	}
+	unsigned char buffer[255 * 255];
+	int length = 0;
+	while(true)
+	{
+		if(player->stop)
+		{
+			log_debug("byte_array_process_start 线程准备退出, deviceid %d", deviceid);
+			break;
+		}
+		
+		length = get_rtp_buffer(player->rtp_array, buffer);
+		if(buffer[0] != 0x24)
+		{
+			player->stop;
+			continue;
+		}
+
+		if(g_rtsp_serv->device[player->serv_pos]->clnt_count != 0)
+		{
+			int clnt_count = g_rtsp_serv->device[player->serv_pos]->clnt_count;
+			for(int i = 0; i < clnt_count; i++)
+			{
+				send(g_rtsp_serv->device[player->serv_pos]->clnt[i].sockfd, buffer, length, 0);
+			}
+		}
+	}
+	log_debug("byte_array_process_start 线程退出, deviceid %d", deviceid);
+	return NULL;
 }
 

@@ -11,14 +11,16 @@
 #ifndef _RTSP_STRUCT_H_H_H
 #define _RTSP_STRUCT_H_H_H
 
-#include <string>
-using namespace std;
 #include <sys/select.h>
+#include "bytearray.h"
+#include "rtsp_protocol.h"
 
 #define MAX_BUF_SIZE (2048)
 #define MAX_CLNT_ONLINE (32)
 #define MAX_VIDEO_CACHE (1024 * 16)
 #define MAX_SERVICE_WAIT_TIME (30)
+#define MAX_CLIENT_COUNT (32)
+#define MAX_DEVICE_COUNT (16)
 
 typedef enum 
 {
@@ -46,54 +48,38 @@ typedef struct
 	int port;
 	// 套接字
 	int sockfd;
-}tcp_conn_info;
+}tcp_client_info;
 
 typedef struct
 {
-	char rtsp_url[128];
-	char video_url[128];
-	char audio_url[128];
-	char username[32];
-	char password[32];
-	char session[64];
-	char nonce[64];
-	char realm[32];
-	char ssrc[2][16];
-	int cmd_seq;
-	bool secret;
-}t_rtsp_info;
-
-typedef struct
-{
-	// 开启的虚拟rtsp连接地址
-	char rtsp_url[128];
-	char video_url[128];
-	char audio_url[128];
-	// reply seq id
-	int cmd_seq;
-	char session[64];
-	char ssrc[2][16];
-	char transport[64];
-}t_rtsp_reply_info;
-
-typedef struct
-{
-	t_device_info *device_info;
-	tcp_conn_info *device_conn;
-	tcp_server_info *rtsp_serv;
-	t_rtsp_info *rtsp_info;
-	t_rtsp_reply_info *reply_info;
-	t_rtp_byte_array *rtp_array;
-
-	// 停止符
+	int deviceid;
+	// 是否在使用
 	bool stop;
-	enum_stop_thread_num stop_thread_no;
-	int thread_num;
-	// rtsp_serv lock
-	pthread_mutex_t serv_lock;
-	fd_set serv_fds;
+	// 无连接时间,单位:秒, 60秒无连接则关闭服务端口
+	int time_count;
+	// 客户端连接数
+	int clnt_count;
+	// client基本信息
+	tcp_client_info clnt[MAX_CLIENT_COUNT];
+}t_device_clnt;
 
-}t_video_play_info;
+typedef struct
+{
+	// 本地IP
+	char ipaddr[16];
+	// 开辟的端口号
+	int port;
+	// 服务端套接字
+	int sockfd;
+	// 
+	fd_set fds;
+	// 锁
+	pthread_mutex_t lock;
+	// device count
+	int device_count;
+	// 最大支持128个设备
+	t_device_clnt *device[MAX_DEVICE_COUNT];
+}tcp_server_info;
 
 typedef struct
 {
@@ -109,5 +95,39 @@ typedef struct
 	unsigned int *csrc_list;
 	unsigned int length;
 }t_rtp_head;
+
+typedef struct
+{
+	char crossname[64];
+	char username[32];
+	char password[32];
+	char ipaddr[16];
+	int port;
+	int deviceid;
+	int devicetype;
+	int rtspport;
+} t_device_info;
+
+typedef struct
+{
+	// 停止符号
+	bool stop;
+	// 到设备的连接套接字
+	int sockfd;
+	// 对应得server服务下标
+	int serv_pos;
+	// 设备基础信息
+	t_device_info *device_info;
+	// rtsp基本信息
+	t_rtsp_info *dev_rtsp_info;
+	// 虚拟rtsp信息
+	t_rtsp_info *vir_rtsp_info;
+	// 存储数据
+	t_byte_array *rtp_array;
+	// 锁
+	pthread_mutex_t lock;
+	// 线程ID
+	pthread_t pid[2];
+}t_device_video_play;
 
 #endif

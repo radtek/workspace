@@ -30,7 +30,7 @@ t_threadpool_task *create_threadpool_task()
 	t_threadpool_task *task = (t_threadpool_task*)malloc(sizeof(t_threadpool_task));
 	task->callback = NULL;
 	task->arg = NULL;
-	task->release = true;
+	task->release = false;
 }
 
 void threadpool_start(int num, int max_task_num)
@@ -48,7 +48,6 @@ void threadpool_start(int num, int max_task_num)
 	task_tail = 0;
 	shutdown = false;
 
-	// 预启动线程
 	for(int i = 0; i < thread_num; i++)
 	{
 		pthread_create(&pid[i], NULL, threadpool_func, NULL);
@@ -57,16 +56,12 @@ void threadpool_start(int num, int max_task_num)
 
 void threadpool_stop()
 {
-	// 关闭标识
 	shutdown = true;
-	// 唤醒所有线程
 	pthread_cond_broadcast(&threadpool_cond);
-	// 等待所有线程结束
 	for(int i = 0; i < thread_num; i++)
 	{
 		pthread_join(pid[i], NULL);
 	}
-	// 内存释放
 	if(pid != NULL)
 	{
 		free(pid);
@@ -75,13 +70,10 @@ void threadpool_stop()
 	if(task_list != NULL)
 	{
 		int n = 0;
-		// 遍历task,释放所有任务的内存空间
 		for(int i = 0; i < task_size; i++)
 		{
-			// 释放task内存
 			if(task_list[task_head] != NULL)
 			{
-				// 释放task的参数内存
 				if(task_list[task_head]->arg != NULL && task_list[task_head]->release)
 				{
 					free(task_list[task_head]->arg);
@@ -96,15 +88,18 @@ void threadpool_stop()
 		task_list = NULL;
 	}
 	
-	// 线程锁销毁
 	pthread_cond_destroy(&threadpool_cond);
 	pthread_mutex_destroy(&threadpool_lock);
 }
 
 int threadpool_add_task(t_threadpool_task* &task)
 {
+	if(task == NULL)
+	{
+		return -1;
+	}
+
 	pthread_mutex_lock(&threadpool_lock);
-	// 如果还有剩余空间,任务放进任务队列
 	if(task_total > task_size)
 	{
 		task_list[task_tail] = task;

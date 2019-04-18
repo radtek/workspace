@@ -11,34 +11,22 @@
 #ifndef RTSP_SERVER_H_H_H
 #define RTSP_SERVER_H_H_H
 
+#include "rtsp_task.h"
 #include "rtsp_struct.h"
 #include <event2/event.h>
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
 
-typedef struct
-{
-	// 开辟的端口号
-	int port;
-	// 服务端套接字
-	int sockfd;
-	// 无连接时间,单位:秒, 60秒无连接则关闭服务端口
-	int time_count;
-	// 
-	int clnt_count;
-	// 最大支持32个用户同时访问
-	tcp_conn_info *clnt[MAX_CLNT_ONLINE];
-}tcp_server_info;
-
-// 返回套接字
-int create_tcp_server(int port);
-// 服务端工作线程, 处理rtsp请求
-void *rtsp_server_start(void *arg);
+// 开启端口
+int create_server_socket(int port);
+// 返回对象
+tcp_server_info *create_tcp_server(char *localip, char *port);
+// 释放内存
+void free_tcp_server(tcp_server_info* &info);
 // rtsp应答
-bool rtsp_response(t_video_play_info *player, int sockfd);
+void rtsp_response(void *arg);
 // 接收rtsp
-int recv_rtsp_command(t_video_play_info *player, int sockfd);
+int recv_rtsp_command(t_device_video_play *player, int sockfd);
 
-int rtsp_cmd_parse(t_rtsp_reply_info *info, char *buffer, int buflen);
 #endif
 

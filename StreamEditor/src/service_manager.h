@@ -11,10 +11,6 @@
 #ifndef _SERVICE_MANAGER_H_H_H
 #define _SERVICE_MANAGER_H_H_H
 
-// 取出完整rtp数据包
-int get_rtp_buffer(t_rtp_byte_array* &rtp_array, unsigned char *buf);
-// 流处理主线程
-void *byte_array_process_start(void *arg);
 // 流处理线程停止
 void byte_array_process_stop(t_rtp_byte_array* &rtp_array);
 

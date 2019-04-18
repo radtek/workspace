@@ -15,7 +15,7 @@ typedef struct
 	void (*callback)(void *arg);
 	// 参数
 	void *arg;
-	// 参数内存是否需要释放, 默认为true
+	// 参数内存是否需要释放, 默认为false
 	bool release;
 }t_threadpool_task;
 

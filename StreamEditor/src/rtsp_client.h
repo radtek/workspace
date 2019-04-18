@@ -10,14 +10,10 @@
 
 #include "rtsp_struct.h"
 
-// 创建客户端连接
-tcp_conn_info *create_tcp_client_conn(char *ipaddr, int port);
-// 开始rtsp任务
-void *rtsp_worker_start(void *arg);
+// 连接到服务器
+int connect_server(char *ipaddr, int port);
 // 发送rtsp视频流请求
-bool rtsp_request(t_video_play_info *player);
+bool rtsp_request(t_device_video_play *player);
 // 封装send rtsp command的系列操作
-bool send_rtsp_command(t_video_play_info *player, int type);
-
-bool rtsp_reply_parse(t_rtsp_info *info, char *buffer, int buflen, int type);
+bool send_rtsp_command(t_device_video_play *player, int type);
 

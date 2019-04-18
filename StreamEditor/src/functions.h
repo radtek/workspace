@@ -51,8 +51,6 @@ void GetConfigureString(string value_name, char *value_buf, unsigned int strlen,
 string ParseMessageHex(const char *src, unsigned int srclen);
 // 返回当前时间
 string GetSystemTime();
-// 分割字符数据
-string *get_part_string(string msg, string separator, int &count);
 // 数字转字符串，模板
 template<typename T> string ToString(const T &n)
 {

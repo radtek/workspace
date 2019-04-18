@@ -11,28 +11,54 @@
 #ifndef __RTSP_PROTOCOL_H_H_H
 #define __RTSP_PROTOCOL_H_H_H
 
-#include "rtsp_struct.h"
+using namespace std;
+#include <stdio.h>
+#include <string.h>
 
-// rtsp client
+typedef struct
+{
+	char rtsp_url[128];
+	char video_url[128];
+	char audio_url[128];
+	char transport[64];
+	char username[32];
+	char password[32];
+	char session[64];
+	char nonce[64];
+	char realm[32];
+	char ssrc[2][16];
+	char ipaddr[16];
+	int cmd_seq;
+	bool secret;
+}t_rtsp_info;
+
+// rtsp请求组包
 int rtsp_cmd_options(t_rtsp_info *info, char *buffer);
 int rtsp_cmd_describe(t_rtsp_info *info, char *buffer);
-int rtsp_cmd_setup(t_rtsp_info *info, char *buffer, int type);
+int rtsp_cmd_setup(t_rtsp_info *info, char *buffer);
 int rtsp_cmd_play(t_rtsp_info *info, char *buffer);
 int rtsp_cmd_teardown(t_rtsp_info *info, char *buffer);
 
-// rtsp server
-int rtsp_reply_options(t_rtsp_reply_info *info, char *buffer);
-int rtsp_reply_describe(t_rtsp_reply_info *info, char *buffer);
-int rtsp_reply_setup(t_rtsp_reply_info *info, char *buffer, int type);
-int rtsp_reply_play(t_rtsp_reply_info *info, char *buffer);
-int rtsp_reply_teardown(t_rtsp_reply_info *info, char *buffer);
+// rtsp应答组包
+int rtsp_reply_options(t_rtsp_info *info, char *buffer);
+int rtsp_reply_describe(t_rtsp_info *info, char *buffer);
+int rtsp_reply_setup(t_rtsp_info *info, char *buffer);
+int rtsp_reply_play(t_rtsp_info *info, char *buffer);
+int rtsp_reply_teardown(t_rtsp_info *info, char *buffer);
 
-// md5加密
-string get_md5_response(t_rtsp_info *info, string type, string url);
+// rtsp应答解析, 返回解析结果
+int rtsp_parse_reply_options(t_rtsp_info *info, char *buffer, int buflen);
+int rtsp_parse_reply_describe(t_rtsp_info *info, char *buffer, int buflen);
+int rtsp_parse_reply_setup(t_rtsp_info *info, char *buffer, int buflen);
+int rtsp_parse_reply_play(t_rtsp_info *info, char *buffer, int buflen);
+int rtsp_parse_reply_teardown(t_rtsp_info *info, char *buffer, int buflen);
 
-// 字符串分割
-string *get_part_string(string str, char c, int &count);
-void string_replace(string &str,char c);
+// rtsp请求解析, 返回解析结果
+int rtsp_parse_cmd_options(t_rtsp_info *info, char *buffer, int buflen);
+int rtsp_parse_cmd_describe(t_rtsp_info *info, char *buffer, int buflen);
+int rtsp_parse_cmd_setup(t_rtsp_info *info, char *buffer, int buflen);
+int rtsp_parse_cmd_play(t_rtsp_info *info, char *buffer, int buflen);
+int rtsp_parse_cmd_teardown(t_rtsp_info *info, char *buffer, int buflen);
 
 #endif
 

@@ -8,17 +8,14 @@
 //	描    述:  
 // =====================================================================================
 
-#include "rtsp_task.h"
 #include "bytearray.h"
-#include "logfile.h"
-#include <sys/socket.h>
-#include <unistd.h>
+#include <string.h>
 #include <stdlib.h>
 
 t_byte_array *create_byte_array(int size)
 {
-	t_byte_array *byte_array = new t_byte_array;
-	byte_array->buffer = new char[size];
+	t_byte_array *byte_array = (t_byte_array*)malloc(sizeof(t_byte_array));
+	byte_array->buffer = (char*)malloc(size);
 	memset(byte_array->buffer, 0, size);
 	byte_array->total = size;
 	byte_array->size = 0;
@@ -30,8 +27,36 @@ t_byte_array *create_byte_array(int size)
 	return byte_array;
 }
 
-bool put_byte_array(t_byte_array* &byte_array, char *buf, int len)
+void free_byte_array(t_byte_array* &byte_array)
 {
+	if(byte_array == NULL)
+	{
+		return;
+	}
+
+	byte_array->stop = true;
+	pthread_cond_signal(&byte_array->cond);
+	if(byte_array != NULL)
+	{
+		if(byte_array->buffer != NULL)
+		{
+			free(byte_array->buffer);
+			byte_array->buffer = NULL;
+		}
+		pthread_mutex_destroy(&byte_array->lock);
+		pthread_cond_destroy(&byte_array->cond);
+		free(byte_array);
+		byte_array = NULL;
+	}
+}
+
+int put_byte_array(t_byte_array *byte_array, const char *buf, int len)
+{
+	if(byte_array == NULL)
+	{
+		return -1;
+	}
+
 	pthread_mutex_lock(&byte_array->lock);
 	if(byte_array->total - byte_array->size >= len)
 	{
@@ -51,22 +76,29 @@ bool put_byte_array(t_byte_array* &byte_array, char *buf, int len)
 		byte_array->size += len;
 		pthread_mutex_unlock(&byte_array->lock);
 		pthread_cond_signal(&byte_array->cond);
-		return true;
+		return 0;
 	}
 	pthread_mutex_unlock(&byte_array->lock);
-	return false;
+	return -1;
 }
 
-bool get_byte_array(t_byte_array* &byte_array, char *buf, int len)
+int get_byte_array(t_byte_array *byte_array, char *buf, int len)
 {
-	pthread_mutex_lock(&byte_array->lock);
-	while(byte_array->size < len)
+	if(byte_array == NULL)
 	{
-		if(byte_array->stop)
-		{
-			break;
-		}
+		return -1;
+	}
+
+	pthread_mutex_lock(&byte_array->lock);
+	while(byte_array->size < len && !byte_array->stop)
+	{
 		pthread_cond_wait(&byte_array->cond, &byte_array->lock);
+	}
+
+	if(byte_array->stop)
+	{
+		pthread_mutex_unlock(&byte_array->lock);
+		return -1;
 	}
 
 	if(byte_array->size >= len)
@@ -86,9 +118,9 @@ bool get_byte_array(t_byte_array* &byte_array, char *buf, int len)
 		}
 		byte_array->size -= len;
 		pthread_mutex_unlock(&byte_array->lock);
-		return true;
+		return 0;
 	}
 	pthread_mutex_unlock(&byte_array->lock);
-	return false;
+	return -1;
 }
 
