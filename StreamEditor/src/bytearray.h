@@ -31,6 +31,8 @@ t_byte_array *create_byte_array(int size = 1024 * 1024 * 10);
 int put_byte_array(t_byte_array *byte_array, const char *buf, int len);
 // 要取出的长度
 int get_byte_array(t_byte_array *byte_array, char *buf, int len);
+// 情空队列
+void clean_byte_array(t_byte_array *byte_array);
 // 
 void free_byte_array(t_byte_array* &byte_array);
 

@@ -151,6 +151,7 @@ void rtsp_response(void *arg)
 			break;
 		}
 	}
+
 	pthread_mutex_lock(&g_rtsp_serv->lock);
 	int count = g_rtsp_serv->device[player->serv_pos]->clnt_count;
 	if(count == MAX_CLIENT_COUNT)

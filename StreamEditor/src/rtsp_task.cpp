@@ -216,6 +216,7 @@ void *rtsp_server_start(void *arg)
 
 	while(true)
 	{
+		maxfd = g_rtsp_serv->maxfd;
 		for(int i = 0; i < g_rtsp_serv->device_count; i++)
 		{
 			if(g_rtsp_serv->device[i]->clnt_count == 0 && !g_rtsp_serv->device[i]->stop)

@@ -74,6 +74,7 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 					break;
 				}
 				player->stop = false;
+				player->rtp_array->stop = false;
 				log_debug("连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, player->device_info->ipaddr);
 				pthread_create(&player->pid[0], NULL, rtsp_worker_start, (void*)&player->device_info->deviceid);
 				pthread_create(&player->pid[1], NULL, byte_array_process_start, (void*)&player->device_info->deviceid);

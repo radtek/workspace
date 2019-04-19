@@ -91,11 +91,6 @@ bool rtsp_request(t_device_video_play *player)
 				length = -1;
 				break;
 		}
-		if(length == -1)
-		{
-			result = -1;
-			break;
-		}
 
 		int n = send_rtsp_message(player->sockfd, buffer, length);
 		memset(buffer, 0, MAX_BUF_SIZE);
@@ -137,7 +132,7 @@ bool rtsp_request(t_device_video_play *player)
 		{
 			if(player->dev_rtsp_info->step == enum_cmd_describe)
 			{
-				player->dev_rtsp_info->step = enum_cmd_describe;
+				// player->dev_rtsp_info->step = enum_cmd_describe;
 			}
 			else
 			{

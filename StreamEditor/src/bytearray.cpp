@@ -21,7 +21,7 @@ t_byte_array *create_byte_array(int size)
 	byte_array->size = 0;
 	byte_array->head = 0;
 	byte_array->tail = 0;
-	byte_array->stop = false;
+	byte_array->stop = true;
 	pthread_mutex_init(&byte_array->lock, NULL);
 	pthread_cond_init(&byte_array->cond, NULL);
 	return byte_array;
@@ -124,3 +124,13 @@ int get_byte_array(t_byte_array *byte_array, char *buf, int len)
 	return -1;
 }
 
+void clean_byte_array(t_byte_array *byte_array)
+{
+	pthread_mutex_lock(&byte_array->lock);
+	byte_array->stop = true;
+	byte_array->size = 0;
+	byte_array->head = 0;
+	byte_array->tail = 0;
+	pthread_mutex_unlock(&byte_array->lock);
+	pthread_cond_signal(&byte_array->cond);
+}
