@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
 			sprintf(iter->second->vir_rtsp_info->video_url, "%s/trackID=1", iter->second->vir_rtsp_info->rtsp_url);
 			sprintf(iter->second->vir_rtsp_info->audio_url, "%s/trackID=2", iter->second->vir_rtsp_info->rtsp_url);
 			sprintf(iter->second->dev_rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/main/av_stream", 
-					iter->second->device_info->ipaddr, iter->second->device_info->port);
+					iter->second->device_info->ipaddr, iter->second->device_info->rtspport);
 			iter++;
 		}
 	}

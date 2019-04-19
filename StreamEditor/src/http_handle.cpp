@@ -40,8 +40,8 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 	std::cout << "body: " << body << std::endl;
     */
 
+	log_debug("接收到http请求, %s", body.c_str());
 	string ret;
-
 	do{
 		Json::Reader reader;
 		Json::Value root;
@@ -84,7 +84,7 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 			else
 			{
 				rtsp_url = player->vir_rtsp_info->rtsp_url;
-				pthread_mutex_lock(&player->lock);
+				pthread_mutex_unlock(&player->lock);
 				log_debug("返回虚拟rtsp地址: %s", rtsp_url.c_str());
 			}
 		}

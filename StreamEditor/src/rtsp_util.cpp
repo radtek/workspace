@@ -8,8 +8,13 @@
 //	描    述:  
 // =====================================================================================
 
-#include "md5.h"
 #include "rtsp_util.h"
+#include "md5.h"
+
+#include <list>
+using namespace std;
+#include <string.h>
+#include <sys/socket.h>
 
 int send_rtsp_message(int sockfd, char *buffer, int buflen)
 {
@@ -39,7 +44,7 @@ int recv_rtsp_message(int sockfd, char *buffer, int buflen)
 		if(len > 0)
 		{
 			length += len;
-			if(buffer[buflen - 2] == '\r' && buffer[buflen - 1] == '\n')
+			if(buffer[length - 2] == '\r' && buffer[length - 1] == '\n')
 			{
 				break;
 			}

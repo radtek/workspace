@@ -10,6 +10,7 @@
 
 #include "functions.h"
 #include "logfile.h"
+#include "rtsp_util.h"
 #include "rtsp_task.h"
 #include "rtsp_client.h"
 #include "rtsp_server.h"
@@ -98,7 +99,9 @@ void rtsp_response(void *arg)
 	{
 		close(sockfd);
 	}
-	int deviceid = rtsp_parse_cmd_options(buffer);
+	int deviceid = 0;
+	int seq = 0;
+	seq = rtsp_parse_cmd_options(buffer, deviceid);
 	t_device_video_play *player = video_task_get(deviceid);
 	if(player == NULL)
 	{
@@ -107,84 +110,62 @@ void rtsp_response(void *arg)
 		return;
 	}
 	memset(buffer, 0, MAX_BUF_SIZE);
-	length = rtsp_reply_options(player->vir_rtsp_info, buffer);
+	length = rtsp_reply_options(player->vir_rtsp_info, buffer, seq);
 	send_rtsp_message(sockfd, buffer, length);
+	int step = 1;
 
 	while(true)
 	{
-		int n = recv_rtsp_command(player, sockfd);
-		if(n == -1)
+		memset(buffer, 0, MAX_BUF_SIZE);
+		length = recv_rtsp_message(sockfd, buffer, MAX_BUF_SIZE);
+		if(length == -1)
 		{
-			log_info(log_queue, "recv_rtsp_command %d failed.", n);
+			log_info(log_queue, "recv_rtsp_command %d failed.", step);
 			return;
 		}
-		else if(n == 4)
+
+		switch(step)
 		{
-			log_info(log_queue, "rtsp process done.");
+		case enum_cmd_describe:
+			seq = rtsp_parse_cmd_describe(player->vir_rtsp_info, buffer, length);
+			length = rtsp_reply_describe(player->vir_rtsp_info, buffer, seq);
 			break;
-		}
-		else if(n == 5)
-		{
-			return;
-		}
-	}
-}
-
-int recv_rtsp_command(t_device_video_play *player, int sockfd)
-{
-	char buffer[MAX_BUF_SIZE] = { 0 };
-	int buflen = 0;
-
-	// 接收cmd数据
-	memset(buffer, 0, MAX_BUF_SIZE);
-	for(int j = 0; j < 3; j++)
-	{
-		int len = recv(sockfd, buffer, MAX_BUF_SIZE - buflen, 0);
-		if(len > 0)
-		{
-			buflen += len;
-			if(buffer[buflen - 2] == '\r' && buffer[buflen - 1] == '\n')
-			{
-				break;
-			}
-		}
-
-		if((errno != EINTR && errno != EWOULDBLOCK && errno != EAGAIN))
-		{
-			return -1;
-		}
-	}
-
-	// 处理应答数据
-	int type = rtsp_cmd_parse(player->vir_rtsp_info, buffer, buflen);
-
-	memset(buffer, 0, MAX_BUF_SIZE);
-	switch(type)
-	{
-		case 0:
-			buflen = rtsp_reply_options(player->vir_rtsp_info, buffer);
+		case enum_cmd_setup:
+			seq = rtsp_parse_cmd_setup(player->vir_rtsp_info, buffer, length);
+			length = rtsp_reply_setup(player->vir_rtsp_info, buffer, seq);
 			break;
-		case 1:
-			buflen = rtsp_reply_describe(player->vir_rtsp_info, buffer);
+		case enum_cmd_play:
+			seq = rtsp_parse_cmd_play(player->vir_rtsp_info, buffer, length);
+			length = rtsp_reply_play(player->vir_rtsp_info, buffer, seq);
 			break;
-		case 2:
-			buflen = rtsp_reply_setup(player->vir_rtsp_info, buffer, 1);
-			break;
-		case 3:
-			buflen = rtsp_reply_setup(player->vir_rtsp_info, buffer, 2);
-			break;
-		case 4:
-			buflen = rtsp_reply_play(player->vir_rtsp_info, buffer);
-			break;
-		case 5:
-			buflen = rtsp_reply_teardown(player->vir_rtsp_info, buffer);
+		case enum_cmd_teardown:
+			seq = rtsp_parse_cmd_teardown(player->vir_rtsp_info, buffer, length);
+			length = rtsp_reply_teardown(player->vir_rtsp_info, buffer, seq);
 			break;
 		default:
 			break;
+		}
+		send_rtsp_message(sockfd, buffer, length);
+		if(step == enum_cmd_play)
+		{
+			break;
+		}
 	}
-
-	// 发送command数据
-		return type;
+	pthread_mutex_lock(&g_rtsp_serv->lock);
+	int count = g_rtsp_serv->device[player->serv_pos]->clnt_count;
+	if(count == MAX_CLIENT_COUNT)
+	{
+		pthread_mutex_unlock(&g_rtsp_serv->lock);
+		close(sockfd);
+		log_debug("rtsp请求连接数超过限制, max client %d", MAX_CLIENT_COUNT);
+	}
+	g_rtsp_serv->device[player->serv_pos]->clntfd[count] = sockfd;
+	g_rtsp_serv->device[player->serv_pos]->clnt_count++;
+	FD_SET(sockfd, &g_rtsp_serv->fds);
+	if(g_rtsp_serv->maxfd < sockfd)
+	{
+		g_rtsp_serv->maxfd = sockfd;
+	}
+	pthread_mutex_unlock(&g_rtsp_serv->lock);
 }
-
 

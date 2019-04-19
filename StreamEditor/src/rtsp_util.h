@@ -11,6 +11,7 @@
 #ifndef _RTSP_UTIL_H_H_H
 #define _RTSP_UTIL_H_H_H
 
+#include "rtsp_protocol.h"
 #include <iostream>
 using namespace std;
 #include <string.h>

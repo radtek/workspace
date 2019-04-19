@@ -22,15 +22,6 @@
 #define MAX_CLIENT_COUNT (32)
 #define MAX_DEVICE_COUNT (16)
 
-typedef enum 
-{
-	enum_cmd_options = 0,
-	enum_cmd_describe = 1,
-	enum_cmd_setup = 2,
-	enum_cmd_play = 3,
-	enum_cmd_teardown = 4
-}enum_rtsp_cmd;
-
 typedef struct 
 {
 	// IP地址
@@ -51,7 +42,7 @@ typedef struct
 	// 客户端连接数
 	int clnt_count;
 	// client基本信息
-	tcp_client_info clnt[MAX_CLIENT_COUNT];
+	int clntfd[MAX_CLIENT_COUNT];
 }t_device_clnt;
 
 typedef struct
@@ -63,6 +54,8 @@ typedef struct
 	// 服务端套接字
 	int sockfd;
 	// 
+	int maxfd;
+	//
 	fd_set fds;
 	// 锁
 	pthread_mutex_t lock;

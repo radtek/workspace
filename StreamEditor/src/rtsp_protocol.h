@@ -15,6 +15,15 @@ using namespace std;
 #include <stdio.h>
 #include <string.h>
 
+typedef enum 
+{
+	enum_cmd_options = 0,
+	enum_cmd_describe = 1,
+	enum_cmd_setup = 2,
+	enum_cmd_play = 3,
+	enum_cmd_teardown = 4
+}enum_rtsp_cmd;
+
 typedef struct
 {
 	char rtsp_url[128];
@@ -31,7 +40,7 @@ typedef struct
 	int cmd_seq;
 	bool secret;
 	// 当前阶段
-	enum_rtsp_cmd step;
+	int step;
 	// 通道数量
 	int chanel;
 	// 协议阶段计数
@@ -53,21 +62,21 @@ int rtsp_parse_reply_play(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_reply_teardown(t_rtsp_info *info, char *buffer, int buflen);
 
 // rtsp应答组包
-int rtsp_reply_options(t_rtsp_info *info, char *buffer);
-int rtsp_reply_describe(t_rtsp_info *info, char *buffer);
-int rtsp_reply_setup(t_rtsp_info *info, char *buffer);
-int rtsp_reply_play(t_rtsp_info *info, char *buffer);
-int rtsp_reply_teardown(t_rtsp_info *info, char *buffer);
+int rtsp_reply_options(t_rtsp_info *info, char *buffer, int cmd_seq);
+int rtsp_reply_describe(t_rtsp_info *info, char *buffer, int cmd_seq);
+int rtsp_reply_setup(t_rtsp_info *info, char *buffer, int cmd_seq);
+int rtsp_reply_play(t_rtsp_info *info, char *buffer, int cmd_seq);
+int rtsp_reply_teardown(t_rtsp_info *info, char *buffer, int cmd_seq);
 
-// rtsp请求解析, 返回解析结果
+// rtsp请求解析, 返回cmd_seq
 int rtsp_parse_cmd_options(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_cmd_describe(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_cmd_setup(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_cmd_play(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_cmd_teardown(t_rtsp_info *info, char *buffer, int buflen);
 
-// 定制解析接口,返回设备id
-int rtsp_parse_cmd_options(char *buffer);
+// 定制解析接口,返回cmd_seq
+int rtsp_parse_cmd_options(char *buffer,int &deviceid);
 
 #endif
 

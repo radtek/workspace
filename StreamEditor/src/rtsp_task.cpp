@@ -270,16 +270,19 @@ void *rtsp_server_start(void *arg)
 				{
 					for(int j = 0; j < g_rtsp_serv->device[i]->clnt_count; j++)
 					{
-						if(FD_ISSET(g_rtsp_serv->device[i]->clnt[j].sockfd, &fds))
+						if(FD_ISSET(g_rtsp_serv->device[i]->clntfd[j], &fds))
 						{
-							int n = recv(g_rtsp_serv->device[i]->clnt[j].sockfd, buffer, MAX_BUF_SIZE, 0);
+							int n = recv(g_rtsp_serv->device[i]->clntfd[j], buffer, MAX_BUF_SIZE, 0);
 							if(n <= 0)
 							{
 								pthread_mutex_lock(&g_rtsp_serv->lock);
 								int count = g_rtsp_serv->device[i]->clnt_count;
-								FD_CLR(g_rtsp_serv->device[i]->clnt[j].sockfd, &g_rtsp_serv->fds);
-								close(g_rtsp_serv->device[i]->clnt[j].sockfd);
-								memcpy(&g_rtsp_serv->device[i]->clnt[j], &g_rtsp_serv->device[i]->clnt[count - 1], sizeof(tcp_client_info));
+								FD_CLR(g_rtsp_serv->device[i]->clntfd[j], &g_rtsp_serv->fds);
+								close(g_rtsp_serv->device[i]->clntfd[j]);
+								if(j < count - 1)
+								{
+									g_rtsp_serv->device[i]->clntfd[j] = g_rtsp_serv->device[i]->clntfd[count - 1];
+								}
 								g_rtsp_serv->device[i]->clnt_count -= 1;
 								pthread_mutex_unlock(&g_rtsp_serv->lock);
 								j -= 1;
@@ -335,7 +338,7 @@ void *byte_array_process_start(void *arg)
 			int clnt_count = g_rtsp_serv->device[player->serv_pos]->clnt_count;
 			for(int i = 0; i < clnt_count; i++)
 			{
-				send(g_rtsp_serv->device[player->serv_pos]->clnt[i].sockfd, buffer, length, 0);
+				send(g_rtsp_serv->device[player->serv_pos]->clntfd[i], buffer, length, 0);
 			}
 		}
 	}

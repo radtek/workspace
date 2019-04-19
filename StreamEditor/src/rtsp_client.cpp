@@ -97,23 +97,23 @@ bool rtsp_request(t_device_video_play *player)
 			break;
 		}
 
-		int n = send_rtsp_message(player->socket, buffer, length);
+		int n = send_rtsp_message(player->sockfd, buffer, length);
 		memset(buffer, 0, MAX_BUF_SIZE);
-		length = recv_rtsp_message(player->socket, buffer, MAX_BUF_SIZE);
+		length = recv_rtsp_message(player->sockfd, buffer, MAX_BUF_SIZE);
 
 		switch(player->dev_rtsp_info->step)
 		{
 			case enum_cmd_options:
-				result = rtsp_cmd_options(player->dev_rtsp_info, buffer);
+				result = rtsp_parse_reply_options(player->dev_rtsp_info, buffer, length);
 				break;
 			case enum_cmd_describe:
-				result = rtsp_cmd_describe(player->dev_rtsp_info, buffer);
+				result = rtsp_parse_reply_describe(player->dev_rtsp_info, buffer, length);
 				break;
 			case enum_cmd_setup:
-				result = rtsp_cmd_setup(player->dev_rtsp_info, buffer);
+				result = rtsp_parse_reply_setup(player->dev_rtsp_info, buffer, length);
 				break;
 			case enum_cmd_play:
-				result = rtsp_cmd_play(player->dev_rtsp_info, buffer);
+				result = rtsp_parse_reply_play(player->dev_rtsp_info, buffer, length);
 				break;
 			default:
 				result = -1;
@@ -126,7 +126,7 @@ bool rtsp_request(t_device_video_play *player)
 			if(player->dev_rtsp_info->step == enum_cmd_setup &&
 				player->dev_rtsp_info->counter == 0)
 			{
-				player->dev_rtsp_info->step -= 1;
+				player->dev_rtsp_info->step = enum_cmd_setup;
 			}
 			else
 			{
@@ -137,7 +137,7 @@ bool rtsp_request(t_device_video_play *player)
 		{
 			if(player->dev_rtsp_info->step == enum_cmd_describe)
 			{
-				player->dev_rtsp_info->step -= 1;
+				player->dev_rtsp_info->step = enum_cmd_describe;
 			}
 			else
 			{

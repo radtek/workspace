@@ -320,7 +320,7 @@ int rtsp_parse_reply_setup(t_rtsp_info *info, char *buffer, int buflen)
 					{
 						if(strcmp(args[0].c_str(), "ssrc") == 0)
 						{
-							if(counter == 0)
+							if(info->counter == 0)
 							{
 								memcpy(info->ssrc[0], args[1].c_str(), args[1].length());
 							}
@@ -423,16 +423,16 @@ int rtsp_parse_reply_teardown(t_rtsp_info *info, char *buffer, int buflen)
 }
 
 /* ***************************************************************************************************************** */
-int rtsp_reply_options(t_rtsp_info *info, char *buffer)
+int rtsp_reply_options(t_rtsp_info *info, char *buffer, int cmd_seq)
 {
 	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
 					"CSeq: %d\r\n"
 					"Public: OPTIONS, DESCRIBE, PLAY, PAUSE, SETUP, TEARDOWN\r\n"
-					"\r\n", info->cmd_seq);
+					"\r\n", cmd_seq);
 	return strlen(buffer);
 }
 
-int rtsp_reply_describe(t_rtsp_info *info, char *buffer)
+int rtsp_reply_describe(t_rtsp_info *info, char *buffer, int cmd_seq)
 {
 	char context[1024] = { 0 };
 	sprintf(context,"v=0\r\n"
@@ -466,16 +466,16 @@ int rtsp_reply_describe(t_rtsp_info *info, char *buffer)
 			"Content-Base: %s/\r\n"
 			"Content-Length: %d\r\n"
 			"\r\n"
-			"%s", info->cmd_seq, info->rtsp_url, strlen(context), context);
+			"%s", cmd_seq, info->rtsp_url, strlen(context), context);
 			 
 	return strlen(buffer);
 }
 
-int rtsp_reply_setup(t_rtsp_info *info, char *buffer)
+int rtsp_reply_setup(t_rtsp_info *info, char *buffer, int cmd_seq)
 {
 	string interleaved;
 	string ssrc;
-	if(inf->counter == 0)
+	if(info->counter == 0)
 	{
 		interleaved = "0-1";
 		ssrc = info->ssrc[0];
@@ -490,11 +490,11 @@ int rtsp_reply_setup(t_rtsp_info *info, char *buffer)
 					"Session:     %s;timeout=60\r\n"
 					"Transport: %s;ssrc=%s;mode=\"play\"\r\n"
 					"\r\n",
-					info->cmd_seq, info->session, info->transport, interleaved.c_str(), ssrc.c_str());
+					cmd_seq, info->session, info->transport, interleaved.c_str(), ssrc.c_str());
 	return strlen(buffer);
 }
 
-int rtsp_reply_play(t_rtsp_info *info, char *buffer)
+int rtsp_reply_play(t_rtsp_info *info, char *buffer, int cmd_seq)
 {
 	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
 					"CSeq: %d\r\n"
@@ -502,11 +502,11 @@ int rtsp_reply_play(t_rtsp_info *info, char *buffer)
 					"RTP-Info: url=%s/trackID=1;seq=32174;rtptime=296066432,"
 							  "url=%s/trackID=2;seq=64348;rtptime=26317072\r\n"
 					"\r\n",
-					info->cmd_seq, info->session, info->rtsp_url, info->rtsp_url);
+					cmd_seq, info->session, info->rtsp_url, info->rtsp_url);
 	return strlen(buffer);
 }
 
-int rtsp_reply_teardown(t_rtsp_info *info, char *buffer)
+int rtsp_reply_teardown(t_rtsp_info *info, char *buffer, int cmd_seq)
 {
 	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
 					"CSeq: 1\r\n"
@@ -551,7 +551,7 @@ int rtsp_parse_cmd_options(t_rtsp_info *info, char *buffer, int buflen)
 			string *strNodes = get_part_string(strLines[i], " ", nNodeCount);
 			if(strcmp(strNodes[0].c_str(), "CSeq:") == 0)
 			{
-				info->cmd_seq = atoi(strNodes[1].c_str());
+				ret = atoi(strNodes[1].c_str());
 			}
 			if(strNodes != NULL)
 			{
@@ -604,7 +604,7 @@ int rtsp_parse_cmd_describe(t_rtsp_info *info, char *buffer, int buflen)
 			string *strNodes = get_part_string(strLines[i], " ", nNodeCount);
 			if(strcmp(strNodes[0].c_str(), "CSeq:") == 0)
 			{
-				info->cmd_seq = atoi(strNodes[1].c_str());
+				ret = atoi(strNodes[1].c_str());
 			}
 			if(strNodes != NULL)
 			{
@@ -657,7 +657,7 @@ int rtsp_parse_cmd_setup(t_rtsp_info *info, char *buffer, int buflen)
 			string *strNodes = get_part_string(strLines[i], " ", nNodeCount);
 			if(strcmp(strNodes[0].c_str(), "CSeq:") == 0)
 			{
-				info->cmd_seq = atoi(strNodes[1].c_str());
+				ret = atoi(strNodes[1].c_str());
 			}
 			else if(strcmp(strNodes[0].c_str(), "Transport:") == 0)
 			{
@@ -715,7 +715,7 @@ int rtsp_parse_cmd_play(t_rtsp_info *info, char *buffer, int buflen)
 			string *strNodes = get_part_string(strLines[i], " ", nNodeCount);
 			if(strcmp(strNodes[0].c_str(), "CSeq:") == 0)
 			{
-				info->cmd_seq = atoi(strNodes[1].c_str());
+				ret = atoi(strNodes[1].c_str());
 			}
 			if(strNodes != NULL)
 			{
@@ -768,7 +768,7 @@ int rtsp_parse_cmd_teardown(t_rtsp_info *info, char *buffer, int buflen)
 			string *strNodes = get_part_string(strLines[i], " ", nNodeCount);
 			if(strcmp(strNodes[0].c_str(), "CSeq:") == 0)
 			{
-				info->cmd_seq = atoi(strNodes[1].c_str());
+				ret = atoi(strNodes[1].c_str());
 			}
 			if(strNodes != NULL)
 			{
@@ -787,7 +787,7 @@ int rtsp_parse_cmd_teardown(t_rtsp_info *info, char *buffer, int buflen)
 }
 
 /* ***************************************************************************************************************** */
-int rtsp_parse_cmd_options(char *buffer)
+int rtsp_parse_cmd_options(char *buffer, int &deviceid)
 {
 	int ret = 0;
 	string message = buffer;
@@ -822,7 +822,7 @@ int rtsp_parse_cmd_options(char *buffer)
 			string *strNodes = get_part_string(strLines[i], " ", nNodeCount);
 			if(strcmp(strNodes[0].c_str(), "CSeq:") == 0)
 			{
-				info->cmd_seq = atoi(strNodes[1].c_str());
+				ret = atoi(strNodes[1].c_str());
 			}
 			if(strNodes != NULL)
 			{
