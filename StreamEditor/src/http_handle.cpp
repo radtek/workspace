@@ -29,6 +29,7 @@ using namespace std;
 // 直接向线程传入int地址时,会存在线程内未使用时,变量即被释放的情况
 
 extern LOG_QUEUE *log_queue;
+extern tcp_server_info *g_rtsp_serv;
 mg_serve_http_opts HttpServer::s_server_option;
 std::string HttpServer::s_web_dir = "./web";
 std::unordered_map<std::string, ReqHandler> HttpServer::s_handler_map;
@@ -67,7 +68,6 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 				{
 					pthread_mutex_unlock(&player->lock);
 					ret = "can't connect to device.";
-					log_debug("连接设备 %d 失败, ip[%s], 请检查设备网络状况.", deviceid, player->device_info->ipaddr);
 					log_info(log_queue, "连接设备 %d 失败, ip[%s], 请检查设备网络状况.", deviceid, player->device_info->ipaddr);
 					break;
 				}
@@ -75,27 +75,29 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 				{
 					pthread_mutex_unlock(&player->lock);
 					ret = "rtsp protocol wrong";
-					log_debug("与设备 %d rtsp对接失败,ip[%s]", deviceid, player->device_info->ipaddr);
 					log_info(log_queue, "与设备 %d rtsp对接失败,ip[%s]", deviceid, player->device_info->ipaddr);
 					break;
 				}
+				// 视频流数据获取线程启动标志
 				player->stop = false;
+				// RTSP服务提供标志
+				g_rtsp_serv->device[player->serv_pos]->stop = false;
+				// 视频流数据处理线程启动标志
 				player->rtp_array->stop = false;
-				log_debug("连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, player->device_info->ipaddr);
 				log_info(log_queue, "连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, player->device_info->ipaddr);
 				pthread_create(&player->pid[0], NULL, rtsp_worker_start, (void*)&player->device_info->deviceid);
 				pthread_create(&player->pid[1], NULL, byte_array_process_start, (void*)&player->device_info->deviceid);
 				pthread_mutex_unlock(&player->lock);
 				rtsp_url = player->vir_rtsp_info->rtsp_url;
-				log_debug("设备的虚拟rtsp地址: %s", rtsp_url.c_str());
-				log_info(log_queue, "设备虚拟rtsp地址: %s", rtsp_url.c_str());
+				log_debug("生成设备虚拟rtsp地址: %s", rtsp_url.c_str());
+				log_info(log_queue, "生成设备虚拟rtsp地址: %s", rtsp_url.c_str());
 			}
 			else
 			{
 				rtsp_url = player->vir_rtsp_info->rtsp_url;
 				pthread_mutex_unlock(&player->lock);
-				log_debug("返回虚拟rtsp地址: %s", rtsp_url.c_str());
-				log_info(log_queue, "返回虚拟rtsp地址: %s", rtsp_url.c_str());
+				log_debug("已存在的订阅, 返回虚拟rtsp地址: %s", rtsp_url.c_str());
+				log_info(log_queue, "已存在的订阅, 返回虚拟rtsp地址: %s", rtsp_url.c_str());
 			}
 		}
 		char response[256] = { 0 };

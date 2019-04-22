@@ -103,7 +103,9 @@ void rtsp_response(void *arg)
 	if(length == -1)
 	{
 		log_debug("client recv error, result %d", length);
+		log_info(log_queue, "接收RTSP请求数据失败, %d, 客户端地址 %s.", length, clnt->ipaddr);
 		close(clnt->sockfd);
+		return;
 	}
 
 	int deviceid = 0;
@@ -140,8 +142,12 @@ void rtsp_response(void *arg)
 	}
 	memset(buffer, 0, MAX_BUF_SIZE);
 	length = rtsp_reply_options(player->vir_rtsp_info, buffer, seq, over);
+	log_info(log_queue, "设备ID %d, 返回 OPTIONS 应答消息", deviceid);
 	send_rtsp_message(clnt->sockfd, buffer, length);
 	int step = 1;
+
+	t_rtsp_info *tmp_info = (t_rtsp_info*)malloc(sizeof(t_rtsp_info));
+	memcpy(tmp_info, player->vir_rtsp_info, sizeof(t_rtsp_info));
 
 	while(true)
 	{
@@ -150,30 +156,36 @@ void rtsp_response(void *arg)
 		if(length == -1)
 		{
 			log_debug("recv_rtsp_command %d failed.", step);
+			log_info(log_queue, "接收RTSP请求数据失败, 客户端地址 %s.", clnt->ipaddr);
+			free(tmp_info);
 			return;
 		}
 
 		switch(step)
 		{
 		case enum_cmd_describe:
-			seq = rtsp_parse_cmd_describe(player->vir_rtsp_info, buffer, length);
+			seq = rtsp_parse_cmd_describe(tmp_info, buffer, length);
 			memset(buffer, 0, MAX_BUF_SIZE);
-			length = rtsp_reply_describe(player->vir_rtsp_info, buffer, seq, over);
+			length = rtsp_reply_describe(tmp_info, buffer, seq, over);
+			log_info(log_queue, "设备ID %d, 返回 DESCRIBE 应答消息", deviceid);
 			break;
 		case enum_cmd_setup:
-			seq = rtsp_parse_cmd_setup(player->vir_rtsp_info, buffer, length);
+			seq = rtsp_parse_cmd_setup(tmp_info, buffer, length);
 			memset(buffer, 0, MAX_BUF_SIZE);
-			length = rtsp_reply_setup(player->vir_rtsp_info, buffer, seq, over);
+			length = rtsp_reply_setup(tmp_info, buffer, seq, over);
+			log_info(log_queue, "设备ID %d, 返回 SETUP 应答消息", deviceid);
 			break;
 		case enum_cmd_play:
-			seq = rtsp_parse_cmd_play(player->vir_rtsp_info, buffer, length);
+			seq = rtsp_parse_cmd_play(tmp_info, buffer, length);
 			memset(buffer, 0, MAX_BUF_SIZE);
-			length = rtsp_reply_play(player->vir_rtsp_info, buffer, seq, over);
+			length = rtsp_reply_play(tmp_info, buffer, seq, over);
+			log_info(log_queue, "设备ID %d, 返回 PLAY 应答消息", deviceid);
 			break;
 		case enum_cmd_teardown:
-			seq = rtsp_parse_cmd_teardown(player->vir_rtsp_info, buffer, length);
+			seq = rtsp_parse_cmd_teardown(tmp_info, buffer, length);
 			memset(buffer, 0, MAX_BUF_SIZE);
-			length = rtsp_reply_teardown(player->vir_rtsp_info, buffer, seq, over);
+			length = rtsp_reply_teardown(tmp_info, buffer, seq, over);
+			log_info(log_queue, "设备ID %d, 返回 TEARDOWN 应答消息", deviceid);
 			break;
 		default:
 			length = -1;
@@ -201,7 +213,7 @@ void rtsp_response(void *arg)
 	{
 		close(clnt->sockfd);
 		log_debug("virtual rtsp client connect failed, deviceid %d", deviceid);
-		log_info(log_queue, "客户端连接失败, 设备ID %d.", deviceid);
+		log_info(log_queue, "客户端连接失败, 设备ID %d, 客户端地址 %s.", deviceid, clnt->ipaddr);
 	}
 	else
 	{
@@ -211,7 +223,7 @@ void rtsp_response(void *arg)
 		{
 			pthread_mutex_unlock(&g_rtsp_serv->lock);
 			close(clnt->sockfd);
-			log_info(log_queue, "当前设备连接数超过最大限制, 可接受连接数 %d", MAX_CLIENT_COUNT);
+			log_info(log_queue, "客户端 %s 连接失败,当前设备连接数超过最大限制, 可接受连接数 %d", clnt->ipaddr, MAX_CLIENT_COUNT);
 			return;
 		}
 		g_rtsp_serv->device[player->serv_pos]->clntfd[count] = clnt->sockfd;
@@ -221,8 +233,9 @@ void rtsp_response(void *arg)
 		{
 			g_rtsp_serv->maxfd = clnt->sockfd;
 		}
-		log_info(log_queue, "客户端连接成功,设备ID %d, 当前连接数 %d.", deviceid, g_rtsp_serv->device[player->serv_pos]->clnt_count);
+		log_info(log_queue, "客户端 %s 连接成功,设备ID %d, 当前连接数 %d.", clnt->ipaddr, deviceid, g_rtsp_serv->device[player->serv_pos]->clnt_count);
 		pthread_mutex_unlock(&g_rtsp_serv->lock);
 	}
+	free(tmp_info);
 }
 
