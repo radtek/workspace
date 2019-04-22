@@ -33,6 +33,7 @@ int send_rtsp_message(int sockfd, char *buffer, int buflen)
 			}
 		}
 	}
+	return buflen;
 }
 
 int recv_rtsp_message(int sockfd, char *buffer, int buflen)
@@ -57,6 +58,7 @@ int recv_rtsp_message(int sockfd, char *buffer, int buflen)
 			}
 		}
 	}
+	return length;
 }
 
 string get_md5_response(t_rtsp_info *info, string cmd, string url)
@@ -108,6 +110,15 @@ string *get_part_string(string msg, string separator, int &count)
 		strs[i++] = (*iter);
 	}
 	return strs;
+}
+
+void free_part_string(string* &parts)
+{
+	if(parts != NULL)
+	{
+		delete [] parts;
+		parts = NULL;
+	}
 }
 
 bool is_separator(char c)

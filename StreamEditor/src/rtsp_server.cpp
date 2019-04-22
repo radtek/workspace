@@ -81,6 +81,11 @@ tcp_server_info *create_tcp_server(char *localip, char *port)
 	info->sockfd = sockfd;
 	info->port = serv_port;
 	info->device_count = 0;
+	FD_ZERO(&info->fds);
+	FD_SET(sockfd, &info->fds);
+	info->maxfd = sockfd;
+	memset(info->vir_url, 0, 128);
+	sprintf(info->vir_url, "rtsp://%s:%d/video/h264/", info->ipaddr, info->port);
 	return info;
 }
 
@@ -90,34 +95,42 @@ void free_tcp_server(tcp_server_info* &info)
 
 void rtsp_response(void *arg)
 {
-	int sockfd = *((int*)arg);
+	tcp_client_info *clnt = (tcp_client_info*)arg;
 
 	char buffer[MAX_BUF_SIZE] = { 0 };
 	int length = 0;
-	length = recv_rtsp_message(sockfd, buffer, MAX_BUF_SIZE);
+	length = recv_rtsp_message(clnt->sockfd, buffer, MAX_BUF_SIZE);
 	if(length == -1)
 	{
-		close(sockfd);
+		log_debug("client recv error, result %d", length);
+		close(clnt->sockfd);
 	}
+
 	int deviceid = 0;
 	int seq = 0;
-	seq = rtsp_parse_cmd_options(buffer, deviceid);
+	int over = -1;
+
+	seq = rtsp_parse_cmd_options(g_rtsp_serv->vir_url, buffer, deviceid);
 	t_device_video_play *player = video_task_get(deviceid);
 	if(player == NULL)
 	{
-		close(sockfd);
+		close(clnt->sockfd);
 		log_debug("no this deviceid %d", deviceid);
 		return;
 	}
+	else
+	{
+		log_debug("request video stream, deviceid %d", deviceid);
+	}
 	memset(buffer, 0, MAX_BUF_SIZE);
-	length = rtsp_reply_options(player->vir_rtsp_info, buffer, seq);
-	send_rtsp_message(sockfd, buffer, length);
+	length = rtsp_reply_options(player->vir_rtsp_info, buffer, seq, over);
+	send_rtsp_message(clnt->sockfd, buffer, length);
 	int step = 1;
 
 	while(true)
 	{
 		memset(buffer, 0, MAX_BUF_SIZE);
-		length = recv_rtsp_message(sockfd, buffer, MAX_BUF_SIZE);
+		length = recv_rtsp_message(clnt->sockfd, buffer, MAX_BUF_SIZE);
 		if(length == -1)
 		{
 			log_info(log_queue, "recv_rtsp_command %d failed.", step);
@@ -128,45 +141,69 @@ void rtsp_response(void *arg)
 		{
 		case enum_cmd_describe:
 			seq = rtsp_parse_cmd_describe(player->vir_rtsp_info, buffer, length);
-			length = rtsp_reply_describe(player->vir_rtsp_info, buffer, seq);
+			memset(buffer, 0, MAX_BUF_SIZE);
+			length = rtsp_reply_describe(player->vir_rtsp_info, buffer, seq, over);
 			break;
 		case enum_cmd_setup:
 			seq = rtsp_parse_cmd_setup(player->vir_rtsp_info, buffer, length);
-			length = rtsp_reply_setup(player->vir_rtsp_info, buffer, seq);
+			memset(buffer, 0, MAX_BUF_SIZE);
+			length = rtsp_reply_setup(player->vir_rtsp_info, buffer, seq, over);
 			break;
 		case enum_cmd_play:
 			seq = rtsp_parse_cmd_play(player->vir_rtsp_info, buffer, length);
-			length = rtsp_reply_play(player->vir_rtsp_info, buffer, seq);
+			memset(buffer, 0, MAX_BUF_SIZE);
+			length = rtsp_reply_play(player->vir_rtsp_info, buffer, seq, over);
 			break;
 		case enum_cmd_teardown:
 			seq = rtsp_parse_cmd_teardown(player->vir_rtsp_info, buffer, length);
-			length = rtsp_reply_teardown(player->vir_rtsp_info, buffer, seq);
+			memset(buffer, 0, MAX_BUF_SIZE);
+			length = rtsp_reply_teardown(player->vir_rtsp_info, buffer, seq, over);
 			break;
 		default:
+			length = -1;
 			break;
 		}
-		send_rtsp_message(sockfd, buffer, length);
-		if(step == enum_cmd_play)
+		if(length == -1)
 		{
 			break;
 		}
+
+		send_rtsp_message(clnt->sockfd, buffer, length);
+		if(step == enum_cmd_play)
+		{
+			log_debug("virtual rtsp client connect success, deviceid %d", deviceid);
+			break;
+		}
+
+		if(over == 0)
+		{
+			step += 1;
+		}
 	}
 
-	pthread_mutex_lock(&g_rtsp_serv->lock);
-	int count = g_rtsp_serv->device[player->serv_pos]->clnt_count;
-	if(count == MAX_CLIENT_COUNT)
+	if(length == -1)
 	{
+		close(clnt->sockfd);
+		log_debug("virtual rtsp client connect failed, deviceid %d", deviceid);
+	}
+	else
+	{
+		pthread_mutex_lock(&g_rtsp_serv->lock);
+		int count = g_rtsp_serv->device[player->serv_pos]->clnt_count;
+		if(count == MAX_CLIENT_COUNT)
+		{
+			pthread_mutex_unlock(&g_rtsp_serv->lock);
+			close(clnt->sockfd);
+			log_debug("rtsp请求连接数超过限制, max client %d", MAX_CLIENT_COUNT);
+		}
+		g_rtsp_serv->device[player->serv_pos]->clntfd[count] = clnt->sockfd;
+		g_rtsp_serv->device[player->serv_pos]->clnt_count++;
+		FD_SET(clnt->sockfd, &g_rtsp_serv->fds);
+		if(g_rtsp_serv->maxfd < clnt->sockfd)
+		{
+			g_rtsp_serv->maxfd = clnt->sockfd;
+		}
 		pthread_mutex_unlock(&g_rtsp_serv->lock);
-		close(sockfd);
-		log_debug("rtsp请求连接数超过限制, max client %d", MAX_CLIENT_COUNT);
 	}
-	g_rtsp_serv->device[player->serv_pos]->clntfd[count] = sockfd;
-	g_rtsp_serv->device[player->serv_pos]->clnt_count++;
-	FD_SET(sockfd, &g_rtsp_serv->fds);
-	if(g_rtsp_serv->maxfd < sockfd)
-	{
-		g_rtsp_serv->maxfd = sockfd;
-	}
-	pthread_mutex_unlock(&g_rtsp_serv->lock);
 }
 

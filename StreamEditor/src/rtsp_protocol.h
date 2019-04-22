@@ -45,6 +45,12 @@ typedef struct
 	int chanel;
 	// 协议阶段计数
 	int counter;
+	// 描述信息条数, base, video, audio
+	int info_count[3];
+	// 描述信息
+	char base_info[10][128];
+	char video_info[10][128];
+	char audio_info[10][128];
 }t_rtsp_info;
 
 // rtsp请求组包
@@ -62,11 +68,11 @@ int rtsp_parse_reply_play(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_reply_teardown(t_rtsp_info *info, char *buffer, int buflen);
 
 // rtsp应答组包
-int rtsp_reply_options(t_rtsp_info *info, char *buffer, int cmd_seq);
-int rtsp_reply_describe(t_rtsp_info *info, char *buffer, int cmd_seq);
-int rtsp_reply_setup(t_rtsp_info *info, char *buffer, int cmd_seq);
-int rtsp_reply_play(t_rtsp_info *info, char *buffer, int cmd_seq);
-int rtsp_reply_teardown(t_rtsp_info *info, char *buffer, int cmd_seq);
+int rtsp_reply_options(t_rtsp_info *info, char *buffer, int cmd_seq, int &over);
+int rtsp_reply_describe(t_rtsp_info *info, char *buffer, int cmd_seq, int &over);
+int rtsp_reply_setup(t_rtsp_info *info, char *buffer, int cmd_seq, int &over);
+int rtsp_reply_play(t_rtsp_info *info, char *buffer, int cmd_seq, int &over);
+int rtsp_reply_teardown(t_rtsp_info *info, char *buffer, int cmd_seq, int &over);
 
 // rtsp请求解析, 返回cmd_seq
 int rtsp_parse_cmd_options(t_rtsp_info *info, char *buffer, int buflen);
@@ -76,7 +82,7 @@ int rtsp_parse_cmd_play(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_cmd_teardown(t_rtsp_info *info, char *buffer, int buflen);
 
 // 定制解析接口,返回cmd_seq
-int rtsp_parse_cmd_options(char *buffer,int &deviceid);
+int rtsp_parse_cmd_options(char *url, char *buffer, int &deviceid);
 
 #endif
 

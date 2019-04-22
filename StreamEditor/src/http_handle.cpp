@@ -34,12 +34,6 @@ std::unordered_map<std::string, ReqHandler> HttpServer::s_handler_map;
 
 bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspCallback rsp_callback)
 {
-	/*
-	std::cout << "handle describe: " << std::endl;
-	std::cout << "url: " << url << std::endl;
-	std::cout << "body: " << body << std::endl;
-    */
-
 	log_debug("接收到http请求, %s", body.c_str());
 	string ret;
 	do{
@@ -66,6 +60,12 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 			if(player->stop)
 			{
 				player->sockfd = connect_server(player->device_info->ipaddr, player->device_info->rtspport);
+				if(player->sockfd == -1)
+				{
+					ret = "can't connect to device.";
+					log_debug("连接设备 %d 失败, ip[%s], 请检查设备网络状况.", deviceid, player->device_info->ipaddr);
+					break;
+				}
 				if(!rtsp_request(player))
 				{
 					pthread_mutex_unlock(&player->lock);

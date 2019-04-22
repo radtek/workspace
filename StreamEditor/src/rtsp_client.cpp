@@ -92,58 +92,72 @@ bool rtsp_request(t_device_video_play *player)
 				break;
 		}
 
-		int n = send_rtsp_message(player->sockfd, buffer, length);
-		memset(buffer, 0, MAX_BUF_SIZE);
-		length = recv_rtsp_message(player->sockfd, buffer, MAX_BUF_SIZE);
-
-		switch(player->dev_rtsp_info->step)
+		if(length == -1)
 		{
-			case enum_cmd_options:
-				result = rtsp_parse_reply_options(player->dev_rtsp_info, buffer, length);
-				break;
-			case enum_cmd_describe:
-				result = rtsp_parse_reply_describe(player->dev_rtsp_info, buffer, length);
-				break;
-			case enum_cmd_setup:
-				result = rtsp_parse_reply_setup(player->dev_rtsp_info, buffer, length);
-				break;
-			case enum_cmd_play:
-				result = rtsp_parse_reply_play(player->dev_rtsp_info, buffer, length);
-				break;
-			default:
-				result = -1;
-				break;
-		}
-
-		// result为1时,握手结束
-		if(result == 0)
-		{
-			if(player->dev_rtsp_info->step == enum_cmd_setup &&
-				player->dev_rtsp_info->counter == 0)
-			{
-				player->dev_rtsp_info->step = enum_cmd_setup;
-			}
-			else
-			{
-				player->dev_rtsp_info->step += 1;
-			}
-		}
-		else if(result == 1)
-		{
-			if(player->dev_rtsp_info->step == enum_cmd_describe)
-			{
-				// player->dev_rtsp_info->step = enum_cmd_describe;
-			}
-			else
-			{
-				break;
-			}
+			break;
+			result = -1;
 		}
 		else
 		{
-			log_debug("client send rtsp message error, message:\n"
+			int n = send_rtsp_message(player->sockfd, buffer, length);
+			memset(buffer, 0, MAX_BUF_SIZE);
+			length = recv_rtsp_message(player->sockfd, buffer, MAX_BUF_SIZE);
+	
+			switch(player->dev_rtsp_info->step)
+			{
+				case enum_cmd_options:
+					result = rtsp_parse_reply_options(player->dev_rtsp_info, buffer, length);
+					break;
+				case enum_cmd_describe:
+					result = rtsp_parse_reply_describe(player->dev_rtsp_info, buffer, length);
+					break;
+				case enum_cmd_setup:
+					result = rtsp_parse_reply_setup(player->dev_rtsp_info, buffer, length);
+					break;
+				case enum_cmd_play:
+					result = rtsp_parse_reply_play(player->dev_rtsp_info, buffer, length);
+					break;
+				default:
+					result = -1;
+					break;
+			}
+
+			// result为1时,握手结束
+			if(result == 0)
+			{
+				if(player->dev_rtsp_info->step == enum_cmd_setup)
+				{
+					player->dev_rtsp_info->counter += 1;
+					if(player->dev_rtsp_info->chanel > player->dev_rtsp_info->counter)
+					{
+						player->dev_rtsp_info->step = enum_cmd_setup;
+					}
+					else
+					{
+						player->dev_rtsp_info->step += 1;
+					}
+				}
+				else
+				{
+					player->dev_rtsp_info->step += 1;
+				}
+			}
+			else if(result == 1)
+			{
+				if(player->dev_rtsp_info->step == enum_cmd_describe)
+				{
+				}
+				else
+				{
+					break;
+				}
+			}
+			else
+			{
+				log_debug("client send rtsp message error, message:\n"
 					"%s\n", buffer);
-			break;
+				break;
+			}
 		}
 	}
 	
@@ -155,7 +169,39 @@ bool rtsp_request(t_device_video_play *player)
 		memcpy(player->vir_rtsp_info->username, player->dev_rtsp_info->username, 32);
 		memcpy(player->vir_rtsp_info->password, player->dev_rtsp_info->password, 32);
 		memcpy(player->vir_rtsp_info->nonce, player->dev_rtsp_info->nonce, 64);
-		memcpy(player->vir_rtsp_info->realm, player->dev_rtsp_info->nonce, 64);
+		memcpy(player->vir_rtsp_info->realm, player->dev_rtsp_info->realm, 64);
+		for(int i = 0; i < 3; i++)
+		{
+			player->vir_rtsp_info->info_count[i] = player->dev_rtsp_info->info_count[i];
+		}
+		memcpy(player->vir_rtsp_info->base_info, player->dev_rtsp_info->base_info, 10 * 128);
+		memcpy(player->vir_rtsp_info->video_info, player->dev_rtsp_info->video_info, 10 * 128);
+		memcpy(player->vir_rtsp_info->audio_info, player->dev_rtsp_info->audio_info, 10 * 128);
+
+		for(int x = 0; x < player->vir_rtsp_info->info_count[0]; x++)
+		{
+			if(strcmp(player->vir_rtsp_info->base_info[x], "a=control:") == 0)
+			{
+				sprintf(player->vir_rtsp_info->base_info[x], "a=control:%s/", player->vir_rtsp_info->rtsp_url);
+			}
+		}
+
+		for(int x = 0; x < player->vir_rtsp_info->info_count[1]; x++)
+		{
+			if(strcmp(player->vir_rtsp_info->video_info[x], "a=control:") == 0)
+			{
+				sprintf(player->vir_rtsp_info->video_info[x], "a=control:%s", player->vir_rtsp_info->video_url);
+			}
+		}
+
+		for(int x = 0; x < player->vir_rtsp_info->info_count[2]; x++)
+		{
+			if(strcmp(player->vir_rtsp_info->audio_info[x], "a=control:") == 0)
+			{
+				sprintf(player->vir_rtsp_info->audio_info[x], "a=control:%s", player->vir_rtsp_info->audio_url);
+			}
+		}
+		player->vir_rtsp_info->chanel = player->dev_rtsp_info->chanel;
 		return true;
 	}
 	return false;

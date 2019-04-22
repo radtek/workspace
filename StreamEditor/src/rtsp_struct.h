@@ -47,6 +47,7 @@ typedef struct
 
 typedef struct
 {
+	char vir_url[128];
 	// 本地IP
 	char ipaddr[16];
 	// 开辟的端口号

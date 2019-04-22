@@ -141,12 +141,12 @@ t_device_video_play *video_task_get(int deviceid)
 int get_rtp_buffer(t_byte_array* &rtp_array, unsigned char *buf)
 {
 	int length = -1;
-	if(get_byte_array(rtp_array, (char*)buf, 4))
+	if(get_byte_array(rtp_array, (char*)buf, 4) == 0)
 	{
 		length = buf[2] * 256 + buf[3];
 		while(true)
 		{
-			if(get_byte_array(rtp_array, (char*)buf + 4, length))
+			if(get_byte_array(rtp_array, (char*)buf + 4, length) == 0)
 			{
 				break;
 			}
@@ -210,13 +210,12 @@ void *rtsp_server_start(void *arg)
 
 	fd_set fds;
 	int result = 0;
-	int maxfd = g_rtsp_serv->sockfd;
+	int maxfd = 0;
 	struct timeval timeout;
 	char buffer[MAX_BUF_SIZE] = { 0 };
 
 	while(true)
 	{
-		maxfd = g_rtsp_serv->maxfd;
 		for(int i = 0; i < g_rtsp_serv->device_count; i++)
 		{
 			if(g_rtsp_serv->device[i]->clnt_count == 0 && !g_rtsp_serv->device[i]->stop)
@@ -227,6 +226,7 @@ void *rtsp_server_start(void *arg)
 					g_rtsp_serv->device[i]->stop = true;
 					int deviceid = g_rtsp_serv->device[i]->deviceid;
 					t_device_video_play *player = video_task_get(deviceid);
+					player->rtp_array->stop = true;
 					player->stop = true;
 					log_info(log_queue, "%s 长时间无连接, 停止任务", player->vir_rtsp_info->rtsp_url);
 					log_debug("%s 长时间无连接,停止任务", player->vir_rtsp_info->rtsp_url);
@@ -234,6 +234,7 @@ void *rtsp_server_start(void *arg)
 			}
 		}
 		
+		maxfd = g_rtsp_serv->maxfd;
 		timeout.tv_sec = 5;
 		timeout.tv_usec = 0;
 		fds = g_rtsp_serv->fds;
@@ -255,6 +256,7 @@ void *rtsp_server_start(void *arg)
 					t_threadpool_task *task = create_threadpool_task();
 					task->callback = &rtsp_response;
 					task->arg = (void *)clnt;
+					task->release = true;
 					threadpool_add_task(task);
 				}
 				result -= 1;
@@ -328,6 +330,14 @@ void *byte_array_process_start(void *arg)
 		}
 		
 		length = get_rtp_buffer(player->rtp_array, buffer);
+		if(length == -1)
+		{
+			log_debug("get_rtp_buffer error: %d", length);
+			continue;
+		}
+
+//		string strMsg = ParseMessageHex(buffer, 4);
+//		log_debug("get rtp length [%4d], head: %s", length, strMsg.c_str());
 		if(buffer[0] != 0x24)
 		{
 			player->stop;

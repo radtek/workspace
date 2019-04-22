@@ -48,7 +48,7 @@ typedef struct
 // 获取配置信息
 void GetConfigureString(string value_name, char *value_buf, unsigned int strlen, string default_value, const char *filename);
 // 返回数据的16进制字符串
-string ParseMessageHex(const char *src, unsigned int srclen);
+string ParseMessageHex(const unsigned char *src, unsigned int srclen);
 // 返回当前时间
 string GetSystemTime();
 // 数字转字符串，模板

@@ -23,6 +23,8 @@ int recv_rtsp_message(int sockfd, char *buffer, int buflen);
 string get_md5_response(t_rtsp_info *info, string type, string url);
 // 分割字符数据
 string *get_part_string(string msg, string separator, int &count);
+// 释放
+void free_part_string(string* &parts);
 // 字符去除
 void string_replace(string &str,char c);
 

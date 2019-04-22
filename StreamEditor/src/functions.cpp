@@ -84,7 +84,7 @@ void GetConfigureString(string value_name, char * value_buf, unsigned int strlen
 	}
 }
 
-string ParseMessageHex(const char *src, unsigned int srclen)
+string ParseMessageHex(const unsigned char *src, unsigned int srclen)
 {
 	if(src == NULL || srclen < 0)
 	{

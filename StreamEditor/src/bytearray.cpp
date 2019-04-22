@@ -9,6 +9,8 @@
 // =====================================================================================
 
 #include "bytearray.h"
+#include <iostream>
+using namespace std;
 #include <string.h>
 #include <stdlib.h>
 
