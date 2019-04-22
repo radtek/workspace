@@ -22,7 +22,6 @@ int rtsp_cmd_options(t_rtsp_info *info, char *buffer)
 					"CSeq: %d\r\n"
 					"\r\n", 
 					info->rtsp_url, ++info->cmd_seq);
-	log_info(log_queue, "Send Command Message: \n%s", buffer);
 	return strlen(buffer);
 }
 
@@ -42,7 +41,6 @@ int rtsp_cmd_describe(t_rtsp_info *info, char *buffer)
 	{
 		sprintf(buffer, "DESCRIBE %s RTSP/1.0\r\nCSeq: %d\r\n\r\n", info->rtsp_url, ++info->cmd_seq);
 	}
-	log_info(log_queue, "Send Command Message: \n%s", buffer);
 	return strlen(buffer);
 }
 
@@ -75,7 +73,6 @@ int rtsp_cmd_setup(t_rtsp_info *info, char *buffer)
 	{
 	}
 
-	log_info(log_queue, "Send Command Message: \n%s", buffer);
 	return strlen(buffer);
 }
 
@@ -97,14 +94,11 @@ int rtsp_cmd_play(t_rtsp_info *info, char *buffer)
 	else
 	{
 	}
-
-	log_info(log_queue, "Send Command Message: \n%s", buffer);
 	return strlen(buffer);
 }
 
 int rtsp_cmd_teardown(t_rtsp_info *info, char *buffer)
 {
-	log_info(log_queue, "Send Command Message: \n%s", buffer);
 	return strlen(buffer);
 }
 
@@ -886,18 +880,12 @@ int rtsp_parse_cmd_options(char *url, char *buffer, int &deviceid)
 				string strId = strNodes[1].substr(strlen(url), strNodes[1].length() - strlen(url));
 				deviceid = atoi(strId.c_str());
 			}
+			free_part_string(strNodes);
 		}
 		else
 		{
 			ret = -1;
-		}
-		if(strNodes != NULL)
-		{
-			delete [] strNodes;
-			strNodes = NULL;
-		}
-		if(ret == -1)
-		{
+			free_part_string(strNodes);
 			break;
 		}
 
@@ -909,11 +897,7 @@ int rtsp_parse_cmd_options(char *url, char *buffer, int &deviceid)
 			{
 				ret = atoi(strNodes[1].c_str());
 			}
-			if(strNodes != NULL)
-			{
-				delete [] strNodes;
-				strNodes = NULL;
-			}
+			free_part_string(strNodes);
 		}
 	}while(0);
 

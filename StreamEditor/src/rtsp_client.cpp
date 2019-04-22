@@ -35,8 +35,19 @@ int connect_server(char *ipaddr, int port)
 		if(setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (char*)&recv_buf_size, sizeof(int)))
 		{
 			log_info(log_queue, "%s[%05d]: setsockopt() failed.", __FILE__, __LINE__);
+			close(sockfd);
 			break;
 		}
+
+		/*
+		int flag = fcntl(sockfd, F_GETFL, 0);
+		if(fcntl(sockfd, F_SETFL, flag | O_NONBLOCK) == -1)
+		{
+			log_info(log_queue, "%s[%5d]: fcntl() failed.", __FILE__, __LINE__);
+			log_debug("fcntl() failed.");
+			break;
+		}
+		*/
 
 		struct sockaddr_in sock_addr;
 		memset(&sock_addr, 0, sizeof(sock_addr));
@@ -47,7 +58,9 @@ int connect_server(char *ipaddr, int port)
 		// 连接到设备
 		if(connect(sockfd, (struct sockaddr*)&sock_addr, sizeof(sockaddr_in)) == -1)
 		{
-			log_info(log_queue, "%s[%05d]: connect() failed.", __FILE__, __LINE__);
+			log_info(log_queue, "%s[%05d]: connect() error: %s", __FILE__, __LINE__, strerror(errno));
+			log_debug("%s[%05d]: connect() error: %s", __FILE__, __LINE__, strerror(errno));
+			close(sockfd);
 			break;
 		}
 		return sockfd;
@@ -99,9 +112,11 @@ bool rtsp_request(t_device_video_play *player)
 		}
 		else
 		{
+//			log_info(log_queue, "Send rtsp command message: \n%s", buffer);
 			int n = send_rtsp_message(player->sockfd, buffer, length);
 			memset(buffer, 0, MAX_BUF_SIZE);
 			length = recv_rtsp_message(player->sockfd, buffer, MAX_BUF_SIZE);
+//			log_info(log_queue, "Recv rtsp reply message: \n%s", buffer);
 	
 			switch(player->dev_rtsp_info->step)
 			{
@@ -154,8 +169,6 @@ bool rtsp_request(t_device_video_play *player)
 			}
 			else
 			{
-				log_debug("client send rtsp message error, message:\n"
-					"%s\n", buffer);
 				break;
 			}
 		}

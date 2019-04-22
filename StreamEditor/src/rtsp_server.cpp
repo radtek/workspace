@@ -111,16 +111,32 @@ void rtsp_response(void *arg)
 	int over = -1;
 
 	seq = rtsp_parse_cmd_options(g_rtsp_serv->vir_url, buffer, deviceid);
+	if(seq == -1)
+	{
+		log_debug("错误的RTSP连接, 连接断开.");
+		log_info(log_queue, "错误的RTSP连接, 连接断开.");
+		close(clnt->sockfd);
+		return;
+	}
+
 	t_device_video_play *player = video_task_get(deviceid);
 	if(player == NULL)
 	{
 		close(clnt->sockfd);
 		log_debug("no this deviceid %d", deviceid);
+		log_info(log_queue, "所请求的设备ID不存在, %d", deviceid);
 		return;
 	}
 	else
 	{
-		log_debug("request video stream, deviceid %d", deviceid);
+		if(player->stop)
+		{
+			log_debug("错误的连接请求,请先订阅, 设备ID %d", deviceid);
+			log_info(log_queue, "错误的服务连接请求,请先订阅此设备视频服务, 设备ID %d", deviceid);
+			close(clnt->sockfd);
+			return;
+		}
+		log_debug("request video stream, deviceid %d, sockfd %d", deviceid, clnt->sockfd);
 	}
 	memset(buffer, 0, MAX_BUF_SIZE);
 	length = rtsp_reply_options(player->vir_rtsp_info, buffer, seq, over);
@@ -133,7 +149,7 @@ void rtsp_response(void *arg)
 		length = recv_rtsp_message(clnt->sockfd, buffer, MAX_BUF_SIZE);
 		if(length == -1)
 		{
-			log_info(log_queue, "recv_rtsp_command %d failed.", step);
+			log_debug("recv_rtsp_command %d failed.", step);
 			return;
 		}
 
@@ -185,6 +201,7 @@ void rtsp_response(void *arg)
 	{
 		close(clnt->sockfd);
 		log_debug("virtual rtsp client connect failed, deviceid %d", deviceid);
+		log_info(log_queue, "客户端连接失败, 设备ID %d.", deviceid);
 	}
 	else
 	{
@@ -194,7 +211,8 @@ void rtsp_response(void *arg)
 		{
 			pthread_mutex_unlock(&g_rtsp_serv->lock);
 			close(clnt->sockfd);
-			log_debug("rtsp请求连接数超过限制, max client %d", MAX_CLIENT_COUNT);
+			log_info(log_queue, "当前设备连接数超过最大限制, 可接受连接数 %d", MAX_CLIENT_COUNT);
+			return;
 		}
 		g_rtsp_serv->device[player->serv_pos]->clntfd[count] = clnt->sockfd;
 		g_rtsp_serv->device[player->serv_pos]->clnt_count++;
@@ -203,6 +221,7 @@ void rtsp_response(void *arg)
 		{
 			g_rtsp_serv->maxfd = clnt->sockfd;
 		}
+		log_info(log_queue, "客户端连接成功,设备ID %d, 当前连接数 %d.", deviceid, g_rtsp_serv->device[player->serv_pos]->clnt_count);
 		pthread_mutex_unlock(&g_rtsp_serv->lock);
 	}
 }

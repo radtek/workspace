@@ -287,6 +287,7 @@ void *rtsp_server_start(void *arg)
 									g_rtsp_serv->device[i]->clntfd[j] = g_rtsp_serv->device[i]->clntfd[count - 1];
 								}
 								g_rtsp_serv->device[i]->clnt_count -= 1;
+								log_debug("client disconnect client count %d.", g_rtsp_serv->device[i]->clnt_count);
 								pthread_mutex_unlock(&g_rtsp_serv->lock);
 								j -= 1;
 							}
@@ -294,14 +295,9 @@ void *rtsp_server_start(void *arg)
 					}
 				}
 			}
-
-			for(int i = 0; i < MAX_CLNT_ONLINE; i++)
-			{
-				if(result == 0)
-				{
-					continue;
-				}
-			}
+		}
+		else
+		{
 		}
 	}
 	log_debug("rtsp_server_start 线程退出");
@@ -312,6 +308,7 @@ void *byte_array_process_start(void *arg)
 {
 	int deviceid = *((int*)arg);
 	log_debug("byte_array_process_start 线程启动, deviceid %d", deviceid);
+	log_info(log_queue, "视频流处理线程启动成功, 设备ID %d", deviceid);
 	pthread_detach(pthread_self());
 	t_device_video_play *player = video_task_get(deviceid);
 	if(player == NULL)
