@@ -78,6 +78,7 @@ bool get_device_info()
 	return false;
 }
 
+// 设备信息初始化
 bool select_device_info(t_db_conn *conn)
 {
 	string sql = "select videodeviceid, devicename, devicetype,deviceip,deviceport,reguser,regpwd from T_TVMS_DEVICE order by videodeviceid";
@@ -128,6 +129,7 @@ void video_play_free(t_device_video_play* &player)
 {
 }
 
+// 获取设备对象
 t_device_video_play *video_task_get(int deviceid)
 {
 	t_device_video_play *player = NULL;
@@ -141,6 +143,7 @@ t_device_video_play *video_task_get(int deviceid)
 	return NULL;
 }
 
+// 获取整条rtp消息
 int get_rtp_buffer(t_byte_array* &rtp_array, unsigned char *buf)
 {
 	int length = -1;
@@ -193,7 +196,7 @@ void *byte_array_process_start(void *arg)
 		length = get_rtp_buffer(player->rtp_array, buffer);
 		if(length == -1)
 		{
-			clean_byte_array(player->rtp_array);
+			reset_byte_array(player->rtp_array);
 			log_info(log_queue, "获取RTP流数据失败, 设备ID %d.", player->device_info->deviceid);
 			continue;
 		}
@@ -292,8 +295,6 @@ void *rtsp_server_start(void *arg)
 				g_rtsp_serv->device[i]->stop = true;
 				int deviceid = g_rtsp_serv->device[i]->deviceid;
 				t_device_video_play *player = video_task_get(deviceid);
-				// 数据处理任务停止
-				player->rtp_array->stop = true;
 				// 内存释放任务添加到线程池来处理
 				t_threadpool_task *task = create_threadpool_task();
 				task->callback = task_release;
@@ -378,8 +379,12 @@ void task_release(void *arg)
 {
 	int deviceid = *((int*)arg);
 	t_device_video_play *player = video_task_get(deviceid);
-	player->rtp_array->stop = true;
+	stop_byte_array(player->rtp_array);
+	reset_byte_array(player->rtp_array);
+	// 结束运行的线程
+	pthread_mutex_lock(&player->lock);
 	player->stop = true;
+	pthread_mutex_unlock(&player->lock);
 	for(int i = 0; i < 2; i++)
 	{
 		pthread_join(player->pid[i], NULL);

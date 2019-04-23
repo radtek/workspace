@@ -78,9 +78,9 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 					log_info(log_queue, "与设备 %d rtsp对接失败,ip[%s]", deviceid, player->device_info->ipaddr);
 					break;
 				}
-				// 视频流数据处理线程启动标志
-				player->rtp_array->stop = false;
 				// RTSP服务提供标志
+				player->stop = false;
+				start_byte_array(player->rtp_array);
 				g_rtsp_serv->device[player->serv_pos]->stop = false;
 				g_rtsp_serv->device[player->serv_pos]->time_count = 0;
 				log_info(log_queue, "连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, player->device_info->ipaddr);

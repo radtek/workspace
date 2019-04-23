@@ -126,10 +126,23 @@ int get_byte_array(t_byte_array *byte_array, char *buf, int len)
 	return -1;
 }
 
-void clean_byte_array(t_byte_array *byte_array)
+void start_byte_array(t_byte_array *byte_array)
+{
+	pthread_mutex_lock(&byte_array->lock);
+	byte_array->stop = false;
+	pthread_mutex_unlock(&byte_array->lock);
+}
+
+void stop_byte_array(t_byte_array *byte_array)
 {
 	pthread_mutex_lock(&byte_array->lock);
 	byte_array->stop = true;
+	pthread_mutex_unlock(&byte_array->lock);
+}
+
+void reset_byte_array(t_byte_array *byte_array)
+{
+	pthread_mutex_lock(&byte_array->lock);
 	byte_array->size = 0;
 	byte_array->head = 0;
 	byte_array->tail = 0;
