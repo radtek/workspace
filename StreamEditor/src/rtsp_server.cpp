@@ -102,7 +102,7 @@ void rtsp_response(void *arg)
 	length = recv_rtsp_message(clnt->sockfd, buffer, MAX_BUF_SIZE);
 	if(length == -1)
 	{
-		log_debug("client recv error, result %d", length);
+		log_debug("接收RTSP请求数据失败, %d.", length);
 		log_info(log_queue, "接收RTSP请求数据失败, %d, 客户端地址 %s.", length, clnt->ipaddr);
 		close(clnt->sockfd);
 		return;
@@ -125,7 +125,7 @@ void rtsp_response(void *arg)
 	if(player == NULL)
 	{
 		close(clnt->sockfd);
-		log_debug("no this deviceid %d", deviceid);
+		log_debug("所请求的设备ID不存在, %d", deviceid);
 		log_info(log_queue, "所请求的设备ID不存在, %d", deviceid);
 		return;
 	}
@@ -157,6 +157,7 @@ void rtsp_response(void *arg)
 		{
 			log_debug("recv_rtsp_command %d failed.", step);
 			log_info(log_queue, "接收RTSP请求数据失败, 客户端地址 %s.", clnt->ipaddr);
+			close(clnt->sockfd);
 			free(tmp_info);
 			return;
 		}
@@ -199,7 +200,6 @@ void rtsp_response(void *arg)
 		send_rtsp_message(clnt->sockfd, buffer, length);
 		if(step == enum_cmd_play)
 		{
-			log_debug("virtual rtsp client connect success, deviceid %d", deviceid);
 			break;
 		}
 
@@ -212,7 +212,6 @@ void rtsp_response(void *arg)
 	if(length == -1)
 	{
 		close(clnt->sockfd);
-		log_debug("virtual rtsp client connect failed, deviceid %d", deviceid);
 		log_info(log_queue, "客户端连接失败, 设备ID %d, 客户端地址 %s.", deviceid, clnt->ipaddr);
 	}
 	else
@@ -228,6 +227,7 @@ void rtsp_response(void *arg)
 		}
 		g_rtsp_serv->device[player->serv_pos]->clntfd[count] = clnt->sockfd;
 		g_rtsp_serv->device[player->serv_pos]->clnt_count++;
+		g_rtsp_serv->device[player->serv_pos]->time_count = 0;
 		FD_SET(clnt->sockfd, &g_rtsp_serv->fds);
 		if(g_rtsp_serv->maxfd < clnt->sockfd)
 		{

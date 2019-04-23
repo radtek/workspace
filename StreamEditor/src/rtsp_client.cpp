@@ -79,6 +79,7 @@ bool rtsp_request(t_device_video_play *player)
 	player->dev_rtsp_info->secret = false;
 	player->dev_rtsp_info->step = enum_cmd_options;
 	player->dev_rtsp_info->counter = 0;
+	player->dev_rtsp_info->chanel = 0;
 
 	char buffer[MAX_BUF_SIZE] = { 0 };
 	int length = 0;
@@ -112,11 +113,11 @@ bool rtsp_request(t_device_video_play *player)
 		}
 		else
 		{
-//			log_info(log_queue, "Send rtsp command message: \n%s", buffer);
+			log_info(log_queue, "Send rtsp command message: \n%s", buffer);
 			int n = send_rtsp_message(player->sockfd, buffer, length);
 			memset(buffer, 0, MAX_BUF_SIZE);
 			length = recv_rtsp_message(player->sockfd, buffer, MAX_BUF_SIZE);
-//			log_info(log_queue, "Recv rtsp reply message: \n%s", buffer);
+			log_info(log_queue, "Recv rtsp reply message: \n%s", buffer);
 	
 			switch(player->dev_rtsp_info->step)
 			{

@@ -67,6 +67,10 @@ bool get_device_info()
 				log_debug("DeviceID: %10d, DeviceType: %.1d, IP: %15s, Username: %8s, Password: %12s",
 						iter->second->device_info->deviceid, iter->second->device_info->devicetype, iter->second->device_info->ipaddr,
 						iter->second->device_info->username, iter->second->device_info->password);
+
+				log_info(log_queue, "DeviceID: %10d, DeviceType: %.1d, IP: %15s, Username: %8s, Password: %12s",
+						iter->second->device_info->deviceid, iter->second->device_info->devicetype, iter->second->device_info->ipaddr,
+						iter->second->device_info->username, iter->second->device_info->password);
 			}
 		}
 		database_close(conn);
@@ -141,12 +145,12 @@ t_device_video_play *video_task_get(int deviceid)
 int get_rtp_buffer(t_byte_array* &rtp_array, unsigned char *buf)
 {
 	int length = -1;
-	if(get_byte_array(rtp_array, (char*)buf, 4) == 0)
+	if(get_byte_array(rtp_array, (char*)buf, 4) >= 0)
 	{
 		length = buf[2] * 256 + buf[3];
 		while(true)
 		{
-			if(get_byte_array(rtp_array, (char*)buf + 4, length) == 0)
+			if(get_byte_array(rtp_array, (char*)buf + 4, length) >= 0)
 			{
 				break;
 			}
@@ -234,7 +238,8 @@ void *rtsp_server_start(void *arg)
 					player->rtp_array->stop = true;
 					// 数据获取任务停止
 					player->stop = true;
-					log_info(log_queue, "%s 服务长时间无连接, 停止任务", player->vir_rtsp_info->rtsp_url);
+					log_info(log_queue, "%s 服务%d秒无连接, 停止任务", player->vir_rtsp_info->rtsp_url, MAX_SERVICE_WAIT_TIME);
+					log_debug("%s 服务长时间无连接, 停止任务", player->vir_rtsp_info->rtsp_url);
 				}
 			}
 		}
@@ -313,13 +318,12 @@ void *rtsp_server_start(void *arg)
 void *byte_array_process_start(void *arg)
 {
 	int deviceid = *((int*)arg);
-	log_debug("byte_array_process_start 线程启动, deviceid %d", deviceid);
+	log_debug("byte_array_process_start 线程启动");
 	log_info(log_queue, "视频流处理线程启动成功, 设备ID %d", deviceid);
 	pthread_detach(pthread_self());
 	t_device_video_play *player = video_task_get(deviceid);
 	if(player == NULL)
 	{
-		log_debug("byte_array_process_start 获取 player 失败, deviceid %d, 线程退出", deviceid);
 		log_debug("byte_array_process_start 获取 player 失败, deviceid %d, 线程退出", deviceid);
 		pthread_exit(NULL);
 	}
@@ -329,15 +333,18 @@ void *byte_array_process_start(void *arg)
 	{
 		if(player->stop)
 		{
-			log_debug("byte_array_process_start 线程准备退出, deviceid %d", deviceid);
+			clean_byte_array(player->rtp_array);
 			break;
 		}
 		
 		length = get_rtp_buffer(player->rtp_array, buffer);
-		if(length == -1)
+		if(length < 0)
 		{
-			log_debug("get_rtp_buffer error: %d", length);
-			log_info(log_queue, "获取RTP流数据失败, 设备ID %d.", player->device_info->deviceid);
+			if(length == -1)
+			{
+				log_debug("get_rtp_buffer error: %d", length);
+				log_info(log_queue, "获取RTP流数据失败, 设备ID %d.", player->device_info->deviceid);
+			}
 			continue;
 		}
 
@@ -357,7 +364,7 @@ void *byte_array_process_start(void *arg)
 			}
 		}
 	}
-	log_debug("byte_array_process_start 线程退出, deviceid %d", deviceid);
+	log_debug("byte_array_process_start 线程退出");
 	log_info(log_queue, "视频流数据处理线程退出, 设备ID %d.", deviceid);
 	return NULL;
 }

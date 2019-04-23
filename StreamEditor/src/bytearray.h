@@ -27,9 +27,9 @@ typedef struct
 
 // 创建对象, 10M
 t_byte_array *create_byte_array(int size = 1024 * 1024 * 10);
-// 放进队列
+// 放进队列，失败返回-1
 int put_byte_array(t_byte_array *byte_array, const char *buf, int len);
-// 要取出的长度
+// 要取出的长度,返回取出的消息长度，失败返回-1，退出返回0
 int get_byte_array(t_byte_array *byte_array, char *buf, int len);
 // 情空队列
 void clean_byte_array(t_byte_array *byte_array);

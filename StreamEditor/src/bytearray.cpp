@@ -100,7 +100,7 @@ int get_byte_array(t_byte_array *byte_array, char *buf, int len)
 	if(byte_array->stop)
 	{
 		pthread_mutex_unlock(&byte_array->lock);
-		return -1;
+		return 0;
 	}
 
 	if(byte_array->size >= len)
@@ -120,7 +120,7 @@ int get_byte_array(t_byte_array *byte_array, char *buf, int len)
 		}
 		byte_array->size -= len;
 		pthread_mutex_unlock(&byte_array->lock);
-		return 0;
+		return len;
 	}
 	pthread_mutex_unlock(&byte_array->lock);
 	return -1;

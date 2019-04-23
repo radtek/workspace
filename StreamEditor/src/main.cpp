@@ -57,9 +57,9 @@ int main(int argc, char *argv[])
 	{
 		log_debug("rtsp server port[%s] start success.", rtsp_port);
 		// 设备最大限制数量
-		int max_count = (g_mapDeviceVideoPlay.size() >= MAX_DEVICE_COUNT) ? MAX_DEVICE_COUNT : g_mapDeviceVideoPlay.size();
+		int device_count = (g_mapDeviceVideoPlay.size() >= MAX_DEVICE_COUNT) ? MAX_DEVICE_COUNT : g_mapDeviceVideoPlay.size();
 		map<unsigned int, t_device_video_play*>::iterator iter = g_mapDeviceVideoPlay.begin();
-		for(int i = 0; i < max_count; i++)
+		for(int i = 0; i < device_count; i++)
 		{
 			g_rtsp_serv->device[i]->deviceid = iter->second->device_info->deviceid;
 			iter->second->serv_pos = i;
@@ -73,6 +73,7 @@ int main(int argc, char *argv[])
 			memcpy(iter->second->dev_rtsp_info->password, iter->second->device_info->password, 32);
 			iter++;
 		}
+		g_rtsp_serv->device_count = device_count;
 	}
 	pthread_t pid;
 	pthread_create(&pid, NULL, rtsp_server_start, NULL);
