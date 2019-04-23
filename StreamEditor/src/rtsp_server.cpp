@@ -27,6 +27,7 @@
 
 extern LOG_QUEUE *log_queue;
 extern tcp_server_info *g_rtsp_serv;
+extern int g_max_device_count;
 
 int create_server_socket(int port)
 {
@@ -71,11 +72,12 @@ tcp_server_info *create_tcp_server(char *localip, char *port)
 	}
 
 	tcp_server_info *info = (tcp_server_info*)malloc(sizeof(tcp_server_info));
-	for(int i = 0; i < MAX_DEVICE_COUNT; i++)
+	for(int i = 0; i < g_max_device_count; i++)
 	{
 		info->device[i] = (t_device_clnt*)malloc(sizeof(t_device_clnt));
 		memset(info->device[i], 0, sizeof(t_device_clnt));
 		info->device[i]->stop = true;
+		info->device[i]->ready_stop = true;
 	}
 	memcpy(info->ipaddr, localip, 16);
 	info->sockfd = sockfd;
@@ -131,7 +133,7 @@ void rtsp_response(void *arg)
 	}
 	else
 	{
-		if(player->stop)
+		if(g_rtsp_serv->device[player->serv_pos]->ready_stop)
 		{
 			log_debug("错误的连接请求,请先订阅, 设备ID %d", deviceid);
 			log_info(log_queue, "错误的服务连接请求,请先订阅此设备视频服务, 设备ID %d", deviceid);
@@ -155,7 +157,6 @@ void rtsp_response(void *arg)
 		length = recv_rtsp_message(clnt->sockfd, buffer, MAX_BUF_SIZE);
 		if(length == -1)
 		{
-			log_debug("recv_rtsp_command %d failed.", step);
 			log_info(log_queue, "接收RTSP请求数据失败, 客户端地址 %s.", clnt->ipaddr);
 			close(clnt->sockfd);
 			free(tmp_info);

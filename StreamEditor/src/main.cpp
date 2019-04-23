@@ -26,15 +26,19 @@ using namespace std;
 map<unsigned int, t_device_video_play*> g_mapDeviceVideoPlay;
 LOG_QUEUE *log_queue = NULL;
 tcp_server_info *g_rtsp_serv;
+int g_max_device_count;
 
 int main(int argc, char *argv[])
 {
 	char localhost[16] = { 0 };
 	char http_port[8] = { 0 };
 	char rtsp_port[8] = { 0 };
+	char dev_count[8] = { 0 };
 	GetConfigureString("local.ipaddr", localhost, 16, "127.0.0.1", CONFFILE);
 	GetConfigureString("http.service.port", http_port, 8, "8000", CONFFILE);
 	GetConfigureString("rtsp.service.port", rtsp_port, 8, "8001", CONFFILE);
+	GetConfigureString("rtsp.device.count", dev_count, 8, "20", CONFFILE);
+	g_max_device_count = atoi(dev_count);
 
 	// 启动日志线程
 	start_log_thread();
@@ -56,8 +60,9 @@ int main(int argc, char *argv[])
 	else
 	{
 		log_debug("rtsp server port[%s] start success.", rtsp_port);
+		log_info(log_queue, "RTSP服务端口开启成功，端口号 %s.", rtsp_port);
 		// 设备最大限制数量
-		int device_count = (g_mapDeviceVideoPlay.size() >= MAX_DEVICE_COUNT) ? MAX_DEVICE_COUNT : g_mapDeviceVideoPlay.size();
+		int device_count = (g_mapDeviceVideoPlay.size() >= g_max_device_count) ? g_max_device_count : g_mapDeviceVideoPlay.size();
 		map<unsigned int, t_device_video_play*>::iterator iter = g_mapDeviceVideoPlay.begin();
 		for(int i = 0; i < device_count; i++)
 		{

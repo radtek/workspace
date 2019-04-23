@@ -32,6 +32,8 @@ void *rtsp_worker_start(void *arg);
 void *rtsp_server_start(void *arg);
 // 流处理主线程
 void *byte_array_process_start(void *arg);
+// 线程池任务, 任务结束时，添加针对设备的task任务，来处理订阅的取消
+void task_release(void *arg);
 
 /*
 void video_task_add(int deviceid);

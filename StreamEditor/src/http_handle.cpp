@@ -61,7 +61,7 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 		else
 		{
 			pthread_mutex_lock(&player->lock);
-			if(player->stop)
+			if(g_rtsp_serv->device[player->serv_pos]->ready_stop)
 			{
 				player->sockfd = connect_server(player->device_info->ipaddr, player->device_info->rtspport);
 				if(player->sockfd == -1)
@@ -78,13 +78,12 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 					log_info(log_queue, "与设备 %d rtsp对接失败,ip[%s]", deviceid, player->device_info->ipaddr);
 					break;
 				}
-				// 视频流数据获取线程启动标志
-				player->stop = false;
-				// RTSP服务提供标志
-				g_rtsp_serv->device[player->serv_pos]->stop = false;
-				g_rtsp_serv->device[player->serv_pos]->time_count = 0;
 				// 视频流数据处理线程启动标志
 				player->rtp_array->stop = false;
+				// RTSP服务提供标志
+				g_rtsp_serv->device[player->serv_pos]->ready_stop = false;
+				g_rtsp_serv->device[player->serv_pos]->stop = false;
+				g_rtsp_serv->device[player->serv_pos]->time_count = 0;
 				log_info(log_queue, "连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, player->device_info->ipaddr);
 				pthread_create(&player->pid[0], NULL, rtsp_worker_start, (void*)&player->device_info->deviceid);
 				pthread_create(&player->pid[1], NULL, byte_array_process_start, (void*)&player->device_info->deviceid);

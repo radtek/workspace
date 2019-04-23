@@ -18,9 +18,9 @@
 #define MAX_BUF_SIZE (2048)
 #define MAX_CLNT_ONLINE (32)
 #define MAX_VIDEO_CACHE (1024 * 16)
-#define MAX_SERVICE_WAIT_TIME (30)
+#define MAX_SERVICE_WAIT_TIME (300)
 #define MAX_CLIENT_COUNT (32)
-#define MAX_DEVICE_COUNT (16)
+#define MAX_DEVICE_COUNT (512)
 
 typedef struct 
 {
@@ -35,6 +35,8 @@ typedef struct
 typedef struct
 {
 	int deviceid;
+	// 是否需要释放
+	bool ready_stop;
 	// 是否在使用
 	bool stop;
 	// 无连接时间,单位:秒, 60秒无连接则关闭服务端口
@@ -95,8 +97,6 @@ typedef struct
 
 typedef struct
 {
-	// 停止符号
-	bool stop;
 	// 到设备的连接套接字
 	int sockfd;
 	// 对应得server服务下标
