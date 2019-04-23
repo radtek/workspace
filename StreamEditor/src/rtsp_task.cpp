@@ -102,6 +102,7 @@ bool select_device_info(t_db_conn *conn)
 			memset(player->vir_rtsp_info, 0, sizeof(t_rtsp_info));
 			player->rtp_array = create_byte_array(1024 * 1024 * 16);
 			pthread_mutex_init(&player->lock, NULL);
+			player->stop = true;
 
 			select >> player->device_info->deviceid;
 			select >> player->device_info->crossname;
@@ -184,7 +185,7 @@ void *byte_array_process_start(void *arg)
 	int length = 0;
 	while(true)
 	{
-		if(g_rtsp_serv->device[player->serv_pos]->ready_stop)
+		if(player->stop)
 		{
 			break;
 		}
@@ -231,7 +232,7 @@ void *rtsp_worker_start(void *arg)
 	char buffer[MAX_VIDEO_CACHE] = { 0 };
 	while(true)
 	{
-		if(g_rtsp_serv->device[player->serv_pos]->ready_stop)
+		if(player->stop)
 		{
 			break;
 		}
@@ -244,7 +245,6 @@ void *rtsp_worker_start(void *arg)
 		else if(n == 0)
 		{
 			close(player->sockfd);
-			player->rtp_array->stop = true;
 			g_rtsp_serv->device[player->serv_pos]->ready_stop = true;
 		}
 		else
@@ -254,7 +254,6 @@ void *rtsp_worker_start(void *arg)
 				continue;
 			}
 			close(player->sockfd);
-			player->rtp_array->stop = true;
 			g_rtsp_serv->device[player->serv_pos]->ready_stop = true;
 		}
 	}
@@ -300,6 +299,7 @@ void *rtsp_server_start(void *arg)
 				task->callback = task_release;
 				task->arg = &g_rtsp_serv->device[i]->deviceid;
 				threadpool_add_task(task);
+				g_rtsp_serv->device[i]->ready_stop = false;
 			}
 		}
 		
@@ -379,6 +379,7 @@ void task_release(void *arg)
 	int deviceid = *((int*)arg);
 	t_device_video_play *player = video_task_get(deviceid);
 	player->rtp_array->stop = true;
+	player->stop = true;
 	for(int i = 0; i < 2; i++)
 	{
 		pthread_join(player->pid[i], NULL);

@@ -77,7 +77,7 @@ tcp_server_info *create_tcp_server(char *localip, char *port)
 		info->device[i] = (t_device_clnt*)malloc(sizeof(t_device_clnt));
 		memset(info->device[i], 0, sizeof(t_device_clnt));
 		info->device[i]->stop = true;
-		info->device[i]->ready_stop = true;
+		info->device[i]->ready_stop = false;
 	}
 	memcpy(info->ipaddr, localip, 16);
 	info->sockfd = sockfd;
@@ -133,7 +133,7 @@ void rtsp_response(void *arg)
 	}
 	else
 	{
-		if(g_rtsp_serv->device[player->serv_pos]->ready_stop)
+		if(player->stop)
 		{
 			log_debug("错误的连接请求,请先订阅, 设备ID %d", deviceid);
 			log_info(log_queue, "错误的服务连接请求,请先订阅此设备视频服务, 设备ID %d", deviceid);

@@ -97,6 +97,7 @@ typedef struct
 
 typedef struct
 {
+	bool stop;
 	// 到设备的连接套接字
 	int sockfd;
 	// 对应得server服务下标
