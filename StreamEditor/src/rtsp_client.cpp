@@ -84,8 +84,26 @@ bool rtsp_request(t_device_video_play *player)
 	char buffer[MAX_BUF_SIZE] = { 0 };
 	int length = 0;
 	int result = 0;
+	// 超过三次发送失败,退出,返回错误
+	int last_step = 0;
+	int counter = 0;
 	while(true)
 	{
+		if(last_step == player->dev_rtsp_info->step)
+		{
+			counter += 1;
+			if(counter > 3)
+			{
+				result = -1;
+				break;
+			}
+		}
+		else
+		{
+			last_step = player->dev_rtsp_info->step;
+			counter = 1;
+		}
+
 		memset(buffer, 0, MAX_BUF_SIZE);
 		switch(player->dev_rtsp_info->step)
 		{

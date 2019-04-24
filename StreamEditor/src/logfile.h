@@ -22,6 +22,8 @@
 #include <unistd.h>
 #include <dirent.h>
 
+#define NO_DEBUG
+
 #define MAX_LOG_QUEUE_COUNT (1024 * 10)
 #define MAX_LOG_QUEUE_SIZE 	(1024 * 10)
 #define MAX_LOG_LINE_LENGTH	(2048)
@@ -40,7 +42,7 @@
 		printf("%s [debug]: "format"\n", log_debug_str.c_str(), ##args); \
 		}while(0)
 #else
-#define log_debug(format, args...) do{}while(0);
+#define log_debug(format, args...) do{}while(0)
 #endif
 
 typedef struct _LOG
