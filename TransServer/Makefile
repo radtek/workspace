@@ -24,5 +24,4 @@ server.o:src/server.cpp src/server.h
 
 .PHONY:clean
 clean:
-		rm -f *.o 
-
+		rm -f *.o bin/rabds

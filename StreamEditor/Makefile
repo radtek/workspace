@@ -52,6 +52,6 @@ threadpool.o:src/threadpool.h
 clean:
 	rm -f *.o 
 rebuild:
-	rm -f *.o
-	make
-
+	rm -f *.o & make
+clean-all:
+	rm -f *.o stream
