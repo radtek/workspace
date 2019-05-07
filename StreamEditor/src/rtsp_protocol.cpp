@@ -39,7 +39,9 @@ int rtsp_cmd_describe(t_rtsp_info *info, char *buffer)
 	}
 	else
 	{
-		sprintf(buffer, "DESCRIBE %s RTSP/1.0\r\nCSeq: %d\r\n\r\n", info->rtsp_url, ++info->cmd_seq);
+		sprintf(buffer, "DESCRIBE %s RTSP/1.0\r\n"
+						"CSeq: %d\r\n"
+						"\r\n", info->rtsp_url, ++info->cmd_seq);
 	}
 	return strlen(buffer);
 }
@@ -62,15 +64,32 @@ int rtsp_cmd_setup(t_rtsp_info *info, char *buffer)
 		}
 		string response = get_md5_response(info, "SETUP", url);
 		sprintf(buffer, "SETUP %s RTSP/1.0\r\n"
-						"Transport: RTP/AVP/TCP;unicast;interleaved=%s\r\n"
 						"CSeq: %d\r\n"
+						"Transport: RTP/AVP/TCP;unicast;interleaved=%s\r\n"
 						"Authorization: Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"
 						"\r\n",
-						url.c_str(), interleaved.c_str(), ++info->cmd_seq, info->username, info->realm,
+						url.c_str(), ++info->cmd_seq, interleaved.c_str(), info->username, info->realm,
 						info->nonce, url.c_str(), response.c_str());
 	}
 	else
 	{
+		string url;
+		string interleaved;
+		if(info->counter == 0)
+		{
+			url = info->video_url;
+			interleaved = "0-1";
+		}
+		else if(info->counter == 1)
+		{
+			url = info->audio_url;
+			interleaved = "2-3";
+		}
+		sprintf(buffer, "SETUP %s RTSP/1.0\r\n"
+						"CSeq: %d\r\n"
+						"Transport: RTP/AVP/TCP;unicast;interleaved=%s\r\n"
+						"\r\n",
+						url.c_str(), ++info->cmd_seq, interleaved.c_str());
 	}
 
 	return strlen(buffer);
@@ -83,9 +102,9 @@ int rtsp_cmd_play(t_rtsp_info *info, char *buffer)
 		string url = info->rtsp_url;
 		string response = get_md5_response(info ,"PLAY", url + "/");
 		sprintf(buffer, "PLAY %s/ RTSP/1.0\r\n"
-						"Range: npt=0.000-\r\n"
 						"CSeq: %d\r\n"
 						"Session: %s\r\n"
+						"Range: npt=0.000-\r\n"
 						"Authorization: Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s/\", response=\"%s\"\r\n"
 						"\r\n",
 						info->rtsp_url, ++info->cmd_seq, info->session, info->username, 
@@ -93,6 +112,14 @@ int rtsp_cmd_play(t_rtsp_info *info, char *buffer)
 	}
 	else
 	{
+		string url = info->rtsp_url;
+		sprintf(buffer, "PLAY %s/ RTSP/1.0\r\n"
+						"CSeq: %d\r\n"
+						"Session: %s\r\n"
+						"Range: npt=0.000-\r\n"
+						"\r\n",
+						info->rtsp_url, ++info->cmd_seq, info->session);
+
 	}
 	return strlen(buffer);
 }
