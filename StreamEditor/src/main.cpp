@@ -19,24 +19,31 @@ using namespace std;
 #include "rtsp_server.h"
 #include "rtsp_task.h"
 #include "http_handle.h"
+#include "websocket_server.h"
 
 #define THREAD_NUM (10)
 #define THREAD_TASK_NUM (1024)
 
 map<unsigned int, t_device_video_play*> g_mapDeviceVideoPlay;
+
 LOG_QUEUE *log_queue = NULL;
 tcp_server_info *g_rtsp_serv;
 int g_max_device_count;
+WebSocketServer g_ws_serv;
+
+void *thread_http(void *arg);
 
 int main(int argc, char *argv[])
 {
 	char localhost[16] = { 0 };
 	char http_port[8] = { 0 };
 	char rtsp_port[8] = { 0 };
+	char ws_port[8] = { 0 };
 	char dev_count[8] = { 0 };
 	GetConfigureString("local.ipaddr", localhost, 16, "127.0.0.1", CONFFILE);
 	GetConfigureString("http.service.port", http_port, 8, "8000", CONFFILE);
 	GetConfigureString("rtsp.service.port", rtsp_port, 8, "8001", CONFFILE);
+	GetConfigureString("ws.service.port", ws_port, 8, "8002", CONFFILE);
 	GetConfigureString("rtsp.device.count", dev_count, 8, "20", CONFFILE);
 	g_max_device_count = atoi(dev_count);
 
@@ -72,7 +79,11 @@ int main(int argc, char *argv[])
 					g_rtsp_serv->ipaddr, g_rtsp_serv->port, iter->second->device_info->deviceid);
 			sprintf(iter->second->vir_rtsp_info->video_url, "%s/trackID=1", iter->second->vir_rtsp_info->rtsp_url);
 			sprintf(iter->second->vir_rtsp_info->audio_url, "%s/trackID=2", iter->second->vir_rtsp_info->rtsp_url);
-			sprintf(iter->second->dev_rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/main/av_stream", 
+			// 主码流
+//			sprintf(iter->second->dev_rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/main/av_stream", 
+//					iter->second->device_info->ipaddr, iter->second->device_info->rtspport);
+			// 子码流
+			sprintf(iter->second->dev_rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/sub/av_stream", 
 					iter->second->device_info->ipaddr, iter->second->device_info->rtspport);
 			memcpy(iter->second->dev_rtsp_info->username, iter->second->device_info->username, 32);
 			memcpy(iter->second->dev_rtsp_info->password, iter->second->device_info->password, 32);
@@ -87,15 +98,26 @@ int main(int argc, char *argv[])
 	threadpool_start(THREAD_NUM, THREAD_TASK_NUM);
 	log_debug("线程池启动完成, 线程数 %d, 最大任务数 %d", THREAD_NUM, THREAD_TASK_NUM);
 
+	pthread_t tid;
+	pthread_create(&tid, NULL, thread_http, (void*)http_port);
+
+	// 开启websocket
+	int port = atoi(ws_port);
+	g_ws_serv.start(port);
+	log_debug("websocket port[%s] start success.", ws_port);
+
+	return EXIT_SUCCESS;
+}
+
+void *thread_http(void *arg)
+{
+	char* port = (char*)arg;
 	// 开启http端口
-	std::string httpport = http_port;
+	std::string httpport = port;
 	auto http_server = std::shared_ptr<HttpServer>(new HttpServer);
 	http_server->Init(httpport);
 	http_server->AddHandler("/rtsp/describe", handle_describe);
 	http_server->AddHandler("/rtsp/undescribe", handle_undescribe);
 	http_server->Start();
-	
-	return EXIT_SUCCESS;
 }
-
 

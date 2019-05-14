@@ -19,7 +19,7 @@ using namespace std;
 #include "rtsp_server.h"
 #include "rtsp_protocol.h"
 #include "http_handle.h"
-#include "jsoncpp/json/json.h"
+#include <jsoncpp/json/json.h>
 #include "rtsp_task.h"
 #include "logfile.h"
 #include "bytearray.h"
@@ -44,7 +44,7 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 		if(!reader.parse(body.c_str(), root))
 		{
 			ret = "bad request";
-			log_info(log_queue, "错误的连接请求, %s", body.c_str());
+			log_info(log_queue, "Http 错误的消息类型, %s", body.c_str());
 			break;
 		}
 

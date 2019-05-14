@@ -48,13 +48,13 @@ bool get_device_info()
 		t_db_conn *conn = create_otl_conn_oracle(ora_user, ora_pwd, ora_name, ora_ip, ora_port);
 		if(database_open(conn) == -1)
 		{
-			log_info(log_queue, "数据库连接失败, 程序退出, [%s]", conn->conn_str);
+			log_debug("数据库连接失败, 程序退出, [%s]", conn->conn_str);
 			break;
 		}
 
 		if(!select_device_info(conn))
 		{
-			log_info(log_queue, "获取设备信息失败, 程序退出");
+			log_debug("获取设备信息失败, 程序退出");
 			break;
 		}
 		else

@@ -22,7 +22,7 @@
 #include <unistd.h>
 #include <dirent.h>
 
-#define NO_DEBUG
+//#define NO_DEBUG
 
 #define MAX_LOG_QUEUE_COUNT (1024 * 10)
 #define MAX_LOG_QUEUE_SIZE 	(1024 * 10)
