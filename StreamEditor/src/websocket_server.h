@@ -70,11 +70,7 @@ private:
 
 	server m_server;
 	conn_list m_connections;
-	queue<action> m_actions;
-
-	mutex m_action_lock;
 	mutex m_connection_lock;
-	condition_variable m_action_cond;
 };
 
 #endif

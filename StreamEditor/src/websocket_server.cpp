@@ -37,34 +37,59 @@ WebSocketServer::~WebSocketServer()
 
 void WebSocketServer::on_open(connection_hdl hdl)
 {
-	{
-		lock_guard<mutex> guard(m_action_lock);
-		m_actions.push(action(SUBSCRIBE, hdl));
-	}
-	m_action_cond.notify_one();
+	lock_guard<mutex> guard(m_connection_lock);
+	m_connections.insert(hdl);
+	log_debug("新的websocket连接, Count: %d", m_connections.size());
 }
 
 void WebSocketServer::on_close(connection_hdl hdl)
 {
-	{
-		lock_guard<mutex> guard(m_action_lock);
-		m_actions.push(action(UNSUBSCRIBE, hdl));
-	}
-	m_action_cond.notify_one();
+	lock_guard<mutex> guard(m_connection_lock);
+	m_connections.erase(hdl);
+	log_debug("断开websocket连接, Count: %d", m_connections.size());
 }
 
 void WebSocketServer::on_message(connection_hdl hdl, message_ptr msg)
 {
+	string data = msg->get_payload();
+	log_debug("websocket 接收到数据 %s", data.c_str());
+
+	Json::Reader reader;
+	Json::Value root;
+	if(!reader.parse(data.c_str(), root))
 	{
-		lock_guard<mutex> guard(m_action_lock);
-		m_actions.push(action(MESSAGE, hdl, msg));
+		log_debug("websocket 错误的消息类型, %s", data.c_str());
+		log_info(log_queue, "websocket 错误的消息类型, %s", data.c_str());
+		return;
 	}
-	m_action_cond.notify_one();
+
+	int deviceid = root["deviceid"].asInt();
+	t_device_video_play *player = video_task_get(deviceid);
+	if(player == NULL)
+	{
+		log_debug("websocket 不存在的设备ID, %d", deviceid);
+		log_info(log_queue, "websocket 不存在的设备ID, %d", deviceid);
+	}
+	else
+	{
+		pthread_mutex_lock(&player->lock);
+		if(player->stop)
+		{
+			t_threadpool_task *task = create_threadpool_task();
+			task->callback = &get_video_stream;
+			task->arg = (void *)player;
+			threadpool_add_task(task);
+		}
+		pthread_mutex_unlock(&player->lock);
+		log_info(log_queue, "websocket 请求视频流, 设备ID %d", deviceid);
+		lock_guard<mutex> guard(m_mapLocks[deviceid]);
+		m_mapSubscribe[deviceid].insert(hdl);
+	}
+	log_debug("websocket 接收到数据处理完毕");
 }
 
 void WebSocketServer::start(int port)
 {
-	thread t(process_message, this);
 	m_server.listen(port);
 	m_server.start_accept();
 	try{
@@ -76,7 +101,7 @@ void WebSocketServer::start(int port)
 
 bool WebSocketServer::is_subscribe(int deviceid)
 {
-	if(m_mapSubscribe.find(deviceid) != m_mapSubscribe.end())
+	if(m_mapSubscribe[deviceid].size() != 0)
 	{
 		return true;
 	}
@@ -86,28 +111,23 @@ bool WebSocketServer::is_subscribe(int deviceid)
 void WebSocketServer::send_video_stream(unsigned int deviceid, char *pData, int nSize)
 {
 	lock_guard<mutex> guard(m_mapLocks[deviceid]);
-	map<unsigned int, conn_list>::iterator iter = m_mapSubscribe.find(deviceid);
-	if(iter != m_mapSubscribe.end())
+	if(m_mapSubscribe[deviceid].size() != 0)
 	{
-		conn_list::iterator it = iter->second.begin();
-		for(; it != iter->second.end(); )
+		conn_list::iterator iter = m_mapSubscribe[deviceid].begin();
+		for(; iter != m_mapSubscribe[deviceid].end();)
 		{
 			try {
-				m_server.send((*it), pData, nSize, websocketpp::frame::opcode::binary);
-				it++;
+				m_server.send((*iter), pData, nSize, websocketpp::frame::opcode::binary);
+				iter++;
 			} catch (const std::exception &e) {
 				log_debug("websocket send_video_stream error, %d.", deviceid);
-				it = iter->second.erase(it);
+				iter = m_mapSubscribe[deviceid].erase(iter);
 			}
-		}
-		
-		if(iter->second.size() == 0)
-		{
-			m_mapSubscribe.erase(iter);
 		}
 	}
 }
 
+/*
 void *WebSocketServer::process_message(void *arg)
 {
 	WebSocketServer *pthis = (WebSocketServer*)arg;
@@ -125,9 +145,6 @@ void *WebSocketServer::process_message(void *arg)
 
 		if(act.type == SUBSCRIBE)
 		{
-			lock_guard<mutex> guard(pthis->m_connection_lock);
-			pthis->m_connections.insert(act.hdl);
-			log_debug("新的websocket连接, Count: %d", pthis->m_connections.size());
 		}
 		else if(act.type == UNSUBSCRIBE)
 		{
@@ -217,7 +234,6 @@ void *WebSocketServer::process_message(void *arg)
 					log_info(log_queue, "连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, player->device_info->ipaddr);
 					pthread_create(&player->pid[0], NULL, rtsp_worker_start, (void*)&player->device_info->deviceid);
 					pthread_create(&player->pid[1], NULL, byte_array_process_start, (void*)&player->device_info->deviceid);
-					*/
 			}
 		}
 		else
@@ -226,4 +242,5 @@ void *WebSocketServer::process_message(void *arg)
 		}
 	}
 }
+*/
 
