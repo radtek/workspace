@@ -13,6 +13,8 @@
 
 #include "http_server.h"
 
+void get_video_stream(void *arg);
+
 bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspCallback rsp_callback);
 
 bool handle_undescribe(std::string url, std::string body, mg_connection *c, OnRspCallback rsp_callback);

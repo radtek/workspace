@@ -54,6 +54,7 @@ int main(int argc, char *argv[])
 	// 获取设备信息
 	if(!get_device_info())
 	{
+		log_debug("获取设备信息失败.");
 		return EXIT_FAILURE;
 	}
 
@@ -61,7 +62,7 @@ int main(int argc, char *argv[])
 	g_rtsp_serv = create_tcp_server(localhost, rtsp_port);
 	if(g_rtsp_serv == NULL)
 	{
-		log_debug("rtsp服务端口 %s ", rtsp_port);
+		log_debug("rtsp服务端口 %s 启动失败", rtsp_port);
 		return EXIT_FAILURE;
 	}
 	else

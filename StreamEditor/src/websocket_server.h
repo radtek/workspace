@@ -61,13 +61,13 @@ public:
 	static void *process_message(void *arg);
 	static void *run(void *arg);
 	void send_video_stream(unsigned int deviceid, char *pData, int nSize);
+	bool is_subscribe(int deviceid);
 private:
 	typedef std::set<connection_hdl, std::owner_less<connection_hdl> > conn_list;
 	// 订阅列表
 	map<unsigned int, conn_list> m_mapSubscribe;
 	map<unsigned int, mutex> m_mapLocks;
 
-	int ws_port;
 	server m_server;
 	conn_list m_connections;
 	queue<action> m_actions;

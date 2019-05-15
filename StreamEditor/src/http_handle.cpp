@@ -19,12 +19,11 @@ using namespace std;
 #include "rtsp_server.h"
 #include "rtsp_protocol.h"
 #include "http_handle.h"
+#include "threadpool.h"
 #include <jsoncpp/json/json.h>
 #include "rtsp_task.h"
 #include "logfile.h"
 #include "bytearray.h"
-
-// 存储的设备信息
 
 // 直接向线程传入int地址时,会存在线程内未使用时,变量即被释放的情况
 
@@ -33,6 +32,41 @@ extern tcp_server_info *g_rtsp_serv;
 mg_serve_http_opts HttpServer::s_server_option;
 std::string HttpServer::s_web_dir = "./web";
 std::unordered_map<std::string, ReqHandler> HttpServer::s_handler_map;
+
+void get_video_stream(void *arg)
+{
+	t_device_video_play *player = (t_device_video_play*)arg;
+
+	pthread_mutex_lock(&player->lock);
+	player->sockfd = connect_server(player->device_info->ipaddr, player->device_info->rtspport);
+	if(player->sockfd == -1)
+	{
+		player->stop = true;
+		pthread_mutex_unlock(&player->lock);
+		log_debug("连接设备 %d 失败, ip[%s], 请检查设备网络状况.", player->device_info->deviceid, player->device_info->ipaddr);
+		log_info(log_queue, "连接设备 %d 失败, ip[%s], 请检查设备网络状况.", player->device_info->deviceid, player->device_info->ipaddr);
+		return;
+	}
+
+	if(!rtsp_request(player))
+	{
+		player->stop = true;
+		pthread_mutex_unlock(&player->lock);
+		log_debug("与设备 %d rtsp对接失败,ip[%s]", player->device_info->deviceid, player->device_info->ipaddr);
+		log_info(log_queue, "与设备 %d rtsp对接失败,ip[%s]", player->device_info->deviceid, player->device_info->ipaddr);
+		return;
+	}
+
+	// RTSP服务提供标志
+	player->stop = false;
+	start_byte_array(player->rtp_array);
+	g_rtsp_serv->device[player->serv_pos]->stop = false;
+	g_rtsp_serv->device[player->serv_pos]->time_count = 0;
+	log_info(log_queue, "连接到设备 %d 成功,ip[%s],开始接收视频流", player->device_info->deviceid, player->device_info->ipaddr);
+	pthread_create(&player->pid[0], NULL, rtsp_worker_start, (void*)&player->device_info->deviceid);
+	pthread_create(&player->pid[1], NULL, byte_array_process_start, (void*)&player->device_info->deviceid);
+	pthread_mutex_unlock(&player->lock);
+}
 
 bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspCallback rsp_callback)
 {
@@ -60,9 +94,17 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 		}
 		else
 		{
+
 			pthread_mutex_lock(&player->lock);
 			if(player->stop)
 			{
+				t_threadpool_task *task = create_threadpool_task();
+				task->callback = &get_video_stream;
+				task->arg = (void *)player;
+				threadpool_add_task(task);
+				pthread_mutex_unlock(&player->lock);
+
+				/*
 				player->sockfd = connect_server(player->device_info->ipaddr, player->device_info->rtspport);
 				if(player->sockfd == -1)
 				{
@@ -86,10 +128,30 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 				log_info(log_queue, "连接到设备 %d 成功,ip[%s],开始接收视频流", deviceid, player->device_info->ipaddr);
 				pthread_create(&player->pid[0], NULL, rtsp_worker_start, (void*)&player->device_info->deviceid);
 				pthread_create(&player->pid[1], NULL, byte_array_process_start, (void*)&player->device_info->deviceid);
-				pthread_mutex_unlock(&player->lock);
-				rtsp_url = player->vir_rtsp_info->rtsp_url;
-				log_debug("生成设备虚拟rtsp地址: %s", rtsp_url.c_str());
-				log_info(log_queue, "生成设备虚拟rtsp地址: %s", rtsp_url.c_str());
+				*/
+
+				bool bRet = false;
+				int i = 0;
+				do{
+					bRet = player->stop;
+					if(!bRet)
+					{
+						break;
+					}
+					sleep(1);
+				}while(i <= 3);
+
+				if(bRet)
+				{
+					rtsp_url = player->vir_rtsp_info->rtsp_url;
+					log_debug("生成设备虚拟rtsp地址: %s", rtsp_url.c_str());
+					log_info(log_queue, "生成设备虚拟rtsp地址: %s", rtsp_url.c_str());
+				}
+				else
+				{
+					ret = "连接到设备端超时";
+					break;
+				}
 			}
 			else
 			{

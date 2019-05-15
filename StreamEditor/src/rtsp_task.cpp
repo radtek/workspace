@@ -17,6 +17,8 @@ using namespace std;
 #include "rtsp_server.h"
 #include "rtsp_protocol.h"
 #include "threadpool.h"
+#include "coder-decoder/rtp_protocol.h"
+#include "websocket_server.h"
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -30,6 +32,94 @@ extern map<unsigned int, t_device_video_play*> g_mapDeviceVideoPlay;
 extern LOG_QUEUE *log_queue;
 extern tcp_server_info *g_rtsp_serv;
 extern int g_max_device_count;
+extern WebSocketServer g_ws_serv;
+
+int parse_nalu_stap(rtp_h264_nalu_t *nalu, unsigned char *buffer)
+{
+	int nalu_size = (buffer[0] << 8) + buffer[1];
+	rtp_nalu_hdr_t nalu_hdr = parse_rtp_h264_format(buffer + 2);
+	nalu->data = (char*)malloc(nalu_size + 4);
+	nalu->data[0] = 0x00;
+	nalu->data[1] = 0x00;
+	nalu->data[2] = 0x00;
+	nalu->data[3] = 0x01;
+	memcpy(nalu->data + 4, buffer + 2, nalu_size);
+	nalu->type = nalu_hdr.type;
+	nalu->size = nalu_size + 4;
+	nalu->union_type = (nalu_hdr.f << 7) + (nalu_hdr.nri << 5) + nalu_hdr.type;
+	nalu->finish = true;
+	return nalu_size + 2;
+}
+
+int parse_nalu(rtp_h264_nalu_t *nalu, unsigned char *buffer, int length)
+{
+	int pos = 0;
+	rtp_hdr_t header = parse_rtp_header(buffer + pos);
+	pos += 12 + header.cc * 4;
+	rtp_nalu_hdr_t nalu_hdr = parse_rtp_h264_format(buffer + pos);
+	pos += 1;
+	if(nalu_hdr.type <= 23)
+	{
+		pos -= 1;
+		nalu->data = (char*)malloc(length - pos + 4);
+		nalu->data[0] = 0x00;
+		nalu->data[1] = 0x00;
+		nalu->data[2] = 0x00;
+		nalu->data[3] = 0x01;
+		memcpy(nalu->data + 4, buffer + pos, length - pos);
+		nalu->type = nalu_hdr.type;
+		nalu->size = length - pos + 4;
+		nalu->union_type = (nalu_hdr.f << 7) + (nalu_hdr.nri << 5) + nalu_hdr.type;
+		nalu->finish = true;
+		return 0;
+	}
+	else if(nalu_hdr.type == 24)
+	{
+		int n = parse_nalu_stap(nalu, buffer + pos);
+		return pos + n;
+	}
+	else if(nalu_hdr.type == 28)
+	{
+		int s = (buffer[pos] >> 7) & 0x01;
+		int e = (buffer[pos] >> 6) & 0x01;
+		int r = (buffer[pos] >> 5) & 0x01;
+		int type = buffer[pos] & 0x1F;
+		if(s)
+		{
+			buffer[pos] = nalu->union_type & 0xFF;
+			nalu->data = (char*)malloc(1024 * 1024 * 32);
+			nalu->data[0] = 0x00;
+			nalu->data[1] = 0x00;
+			nalu->data[2] = 0x00;
+			nalu->data[3] = 0x01;
+			memcpy(nalu->data + 4, buffer + pos, length - pos);
+			nalu->type = type;
+			nalu->size = length - pos + 4;
+			nalu->union_type = (nalu_hdr.f << 7) + (nalu_hdr.nri << 5) + type;
+			nalu->data[4] = nalu->union_type & 0xFF;
+			nalu->finish = false;
+		}
+		else if(e)
+		{
+			pos += 1;
+			memcpy(nalu->data + nalu->size, buffer + pos, length - pos);
+			nalu->size = length - pos + nalu->size;
+			nalu->finish = true;
+		}
+		else
+		{
+			pos += 1;
+			memcpy(nalu->data + nalu->size, buffer + pos, length - pos);
+			nalu->size = length - pos + nalu->size;
+		}
+		return 0;
+	}
+	else
+	{
+		log_debug("not defined");
+	}
+	return -1;
+}
 
 bool get_device_info()
 {
@@ -147,15 +237,10 @@ t_device_video_play *video_task_get(int deviceid)
 int get_rtp_buffer(t_byte_array* &rtp_array, unsigned char *buf)
 {
 	int length = get_byte_array(rtp_array, (char*)buf, 4);
-	if(length > 0)
-	{
-		if(buf[0] != 0x24)
-		{
-			log_debug("异常数据");
-			return -1;
-		}
+	length = buf[2] * 256 + buf[3];
 
-		length = buf[2] * 256 + buf[3];
+	if(buf[0] == 0x24 && buf[1] < 4 && length < 2048)
+	{
 		while(true)
 		{
 			if(get_byte_array(rtp_array, (char*)buf + 4, length) >= 0)
@@ -165,6 +250,11 @@ int get_rtp_buffer(t_byte_array* &rtp_array, unsigned char *buf)
 			sleep(0.01);
 		}
 		length += 4;
+	}
+	else
+	{
+		reset_byte_array(rtp_array);
+		return -1;
 	}
 	return length;
 }
@@ -185,6 +275,8 @@ void *byte_array_process_start(void *arg)
 		log_debug("byte_array_process_start 启动成功, deviceid %d", deviceid);
 		log_info(log_queue, "视频流处理线程启动成功, 设备ID %d", deviceid);
 	}
+
+	rtp_h264_nalu_t *nalu = NULL;
 	unsigned char buffer[256 * 256];
 	int length = 0;
 	while(true)
@@ -199,7 +291,7 @@ void *byte_array_process_start(void *arg)
 		{
 			if(length == -1)
 			{
-				reset_byte_array(player->rtp_array);
+				log_debug("获取RTP流数据失败, 设备ID %d.", player->device_info->deviceid);
 				log_info(log_queue, "获取RTP流数据失败, 设备ID %d.", player->device_info->deviceid);
 			}
 			else
@@ -209,14 +301,79 @@ void *byte_array_process_start(void *arg)
 			continue;
 		}
 
-		if(g_rtsp_serv->device[player->serv_pos]->clnt_count != 0)
+		int channel_id = buffer[1];
+		if(channel_id == 0)
 		{
-			int clnt_count = g_rtsp_serv->device[player->serv_pos]->clnt_count;
-			for(int i = 0; i < clnt_count; i++)
+			// 推送rtp数据
+			if(g_rtsp_serv->device[player->serv_pos]->clnt_count != 0)
 			{
-				send(g_rtsp_serv->device[player->serv_pos]->clntfd[i], buffer, length, 0);
+				int clnt_count = g_rtsp_serv->device[player->serv_pos]->clnt_count;
+				for(int i = 0; i < clnt_count; i++)
+				{
+					send(g_rtsp_serv->device[player->serv_pos]->clntfd[i], buffer, length, 0);
+				}
+			}
+
+			// websocket推送数据
+			if(g_ws_serv.is_subscribe(deviceid))
+			{
+				if(nalu == NULL)
+				{
+					nalu = (rtp_h264_nalu_t*)malloc(sizeof(rtp_h264_nalu_t));
+					nalu->data = NULL;
+					nalu->finish = false;
+				}
+
+				int ret = parse_nalu(nalu, buffer + 4, length - 4);
+				if(nalu->finish)
+				{
+					g_ws_serv.send_video_stream(deviceid, nalu->data, nalu->size);
+					free(nalu->data);
+					free(nalu);
+					nalu = NULL;
+				}
+
+				if(ret > 0)
+				{
+					while(ret < length - 4)
+					{
+						if(nalu == NULL)
+						{
+							nalu = (rtp_h264_nalu_t*)malloc(sizeof(rtp_h264_nalu_t));
+							nalu->data = NULL;
+							nalu->finish = false;
+						}
+						int n = parse_nalu_stap(nalu, buffer + ret + 4);
+						g_ws_serv.send_video_stream(deviceid, nalu->data, nalu->size);
+						ret += n;
+
+						free(nalu->data);
+						free(nalu);
+						nalu = NULL;
+					}
+				}
+			}
+			else
+			{
+				if(nalu != NULL)
+				{
+					if(nalu->data != NULL)
+					{
+						free(nalu->data);
+					}
+					free(nalu);
+					nalu = NULL;
+				}
 			}
 		}
+	}
+	if(nalu != NULL)
+	{
+		if(nalu->data != NULL)
+		{
+			free(nalu->data);
+		}
+		free(nalu);
 	}
 	log_debug("byte_array_process_start 线程退出");
 	log_info(log_queue, "视频流数据处理线程退出, 设备ID %d.", deviceid);
@@ -286,15 +443,25 @@ void *rtsp_server_start(void *arg)
 
 	while(true)
 	{
+		// 遍历所有在播设备
 		for(int i = 0; i < g_rtsp_serv->device_count; i++)
 		{
-			if(g_rtsp_serv->device[i]->clnt_count == 0 && !g_rtsp_serv->device[i]->stop)
+			if(!g_rtsp_serv->device[i]->stop)
 			{
-				g_rtsp_serv->device[i]->time_count += 5;
-				if(g_rtsp_serv->device[i]->time_count >= MAX_SERVICE_WAIT_TIME)
+				if(g_rtsp_serv->device[i]->clnt_count == 0 && 
+					!g_ws_serv.is_subscribe(g_rtsp_serv->device[i]->deviceid))
 				{
-					g_rtsp_serv->device[i]->ready_stop = true;
-					log_info(log_queue, "设备ID%d, %d秒无连接, 停止任务", g_rtsp_serv->device[i]->deviceid, MAX_SERVICE_WAIT_TIME);
+					log_debug("nobody subscribe, %d", g_rtsp_serv->device[i]->deviceid);
+					g_rtsp_serv->device[i]->time_count += 5;
+					if(g_rtsp_serv->device[i]->time_count >= MAX_SERVICE_WAIT_TIME)
+					{
+						g_rtsp_serv->device[i]->ready_stop = true;
+						log_info(log_queue, "设备ID%d, %d秒无连接, 停止任务", g_rtsp_serv->device[i]->deviceid, MAX_SERVICE_WAIT_TIME);
+					}
+				}
+				else
+				{
+					g_rtsp_serv->device[i]->time_count = 0;
 				}
 			}
 			

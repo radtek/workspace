@@ -23,7 +23,7 @@ int task_total;
 int task_size;
 int task_head;
 int task_tail;
-bool shutdown;
+bool threadpool_shutdown;
 
 t_threadpool_task *create_threadpool_task()
 {
@@ -46,7 +46,7 @@ void threadpool_start(int num, int max_task_num)
 	task_size = 0;
 	task_head = 0;
 	task_tail = 0;
-	shutdown = false;
+	threadpool_shutdown = false;
 
 	for(int i = 0; i < thread_num; i++)
 	{
@@ -56,7 +56,7 @@ void threadpool_start(int num, int max_task_num)
 
 void threadpool_stop()
 {
-	shutdown = true;
+	threadpool_shutdown = true;
 	pthread_cond_broadcast(&threadpool_cond);
 	for(int i = 0; i < thread_num; i++)
 	{
@@ -121,13 +121,13 @@ void *threadpool_func(void *arg)
 	while(true)
 	{
 		pthread_mutex_lock(&threadpool_lock);
-		while(task_size == 0 && !shutdown)
+		while(task_size == 0 && !threadpool_shutdown)
 		{
 			pthread_cond_wait(&threadpool_cond, &threadpool_lock);
 			// 线程池结束
 		}
 		
-		if(shutdown)
+		if(threadpool_shutdown)
 		{
 			pthread_mutex_unlock(&threadpool_lock);
 			pthread_exit(NULL);
