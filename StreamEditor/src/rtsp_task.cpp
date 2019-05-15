@@ -38,7 +38,6 @@ int parse_nalu_stap(rtp_h264_nalu_t *nalu, unsigned char *buffer)
 {
 	int nalu_size = (buffer[0] << 8) + buffer[1];
 	rtp_nalu_hdr_t nalu_hdr = parse_rtp_h264_format(buffer + 2);
-	nalu->data = (char*)malloc(nalu_size + 4);
 	nalu->data[0] = 0x00;
 	nalu->data[1] = 0x00;
 	nalu->data[2] = 0x00;
@@ -61,7 +60,6 @@ int parse_nalu(rtp_h264_nalu_t *nalu, unsigned char *buffer, int length)
 	if(nalu_hdr.type <= 23)
 	{
 		pos -= 1;
-		nalu->data = (char*)malloc(length - pos + 4);
 		nalu->data[0] = 0x00;
 		nalu->data[1] = 0x00;
 		nalu->data[2] = 0x00;
@@ -87,7 +85,6 @@ int parse_nalu(rtp_h264_nalu_t *nalu, unsigned char *buffer, int length)
 		if(s)
 		{
 			buffer[pos] = nalu->union_type & 0xFF;
-			nalu->data = (char*)malloc(1024 * 1024 * 32);
 			nalu->data[0] = 0x00;
 			nalu->data[1] = 0x00;
 			nalu->data[2] = 0x00;
@@ -277,6 +274,11 @@ void *byte_array_process_start(void *arg)
 	}
 
 	rtp_h264_nalu_t *nalu = NULL;
+	nalu = (rtp_h264_nalu_t*)malloc(sizeof(rtp_h264_nalu_t));
+	nalu->data = (char*)malloc(1024 * 1024 * 32);
+	nalu->size = 0;
+	nalu->finish = false;
+
 	unsigned char buffer[256 * 256];
 	int length = 0;
 	while(true)
@@ -317,64 +319,37 @@ void *byte_array_process_start(void *arg)
 			// websocket推送数据
 			if(g_ws_serv.is_subscribe(deviceid))
 			{
-				if(nalu == NULL)
-				{
-					nalu = (rtp_h264_nalu_t*)malloc(sizeof(rtp_h264_nalu_t));
-					nalu->data = NULL;
-					nalu->finish = false;
-				}
-
 				int ret = parse_nalu(nalu, buffer + 4, length - 4);
 				if(nalu->finish)
 				{
 					g_ws_serv.send_video_stream(deviceid, nalu->data, nalu->size);
-					free(nalu->data);
-					free(nalu);
-					nalu = NULL;
+					nalu->size = 0;
+					nalu->finish = false;
 				}
 
 				if(ret > 0)
 				{
 					while(ret < length - 4)
 					{
-						if(nalu == NULL)
-						{
-							nalu = (rtp_h264_nalu_t*)malloc(sizeof(rtp_h264_nalu_t));
-							nalu->data = NULL;
-							nalu->finish = false;
-						}
 						int n = parse_nalu_stap(nalu, buffer + ret + 4);
 						g_ws_serv.send_video_stream(deviceid, nalu->data, nalu->size);
 						ret += n;
 
-						free(nalu->data);
-						free(nalu);
-						nalu = NULL;
+						nalu->size = 0;
+						nalu->finish = false;
 					}
 				}
 			}
 			else
 			{
-				if(nalu != NULL)
-				{
-					if(nalu->data != NULL)
-					{
-						free(nalu->data);
-					}
-					free(nalu);
-					nalu = NULL;
-				}
+				nalu->size = 0;
+				nalu->finish = false;
 			}
 		}
 	}
-	if(nalu != NULL)
-	{
-		if(nalu->data != NULL)
-		{
-			free(nalu->data);
-		}
-		free(nalu);
-	}
+	free(nalu->data);
+	free(nalu);
+
 	log_debug("byte_array_process_start 线程退出");
 	log_info(log_queue, "视频流数据处理线程退出, 设备ID %d.", deviceid);
 	return NULL;
