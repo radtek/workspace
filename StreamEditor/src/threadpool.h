@@ -17,6 +17,8 @@ typedef struct
 	void *arg;
 	// 参数内存是否需要释放, 默认为false
 	bool release;
+	// task id
+	int taskId;
 }t_threadpool_task;
 
 t_threadpool_task *create_threadpool_task();
@@ -26,4 +28,5 @@ void threadpool_start(int num, int max_task_num);
 void threadpool_stop();
 // 
 int threadpool_add_task(t_threadpool_task* &task);
+int threadpool_add_task(t_threadpool_task* &task, int taskId);
 void *threadpool_func(void *arg);

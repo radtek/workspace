@@ -98,6 +98,11 @@ int parse_nalu(rtp_h264_nalu_t *nalu, unsigned char *buffer, int length)
 		}
 		else if(e)
 		{
+			if(nalu->size == 0)
+			{
+				return 0;
+			}
+
 			pos += 1;
 			memcpy(nalu->data + nalu->size, buffer + pos, length - pos);
 			nalu->size = length - pos + nalu->size;
@@ -105,6 +110,11 @@ int parse_nalu(rtp_h264_nalu_t *nalu, unsigned char *buffer, int length)
 		}
 		else
 		{
+			if(nalu->size == 0)
+			{
+				return 0;
+			}
+
 			pos += 1;
 			memcpy(nalu->data + nalu->size, buffer + pos, length - pos);
 			nalu->size = length - pos + nalu->size;
@@ -426,7 +436,7 @@ void *rtsp_server_start(void *arg)
 				if(g_rtsp_serv->device[i]->clnt_count == 0 && 
 					!g_ws_serv.is_subscribe(g_rtsp_serv->device[i]->deviceid))
 				{
-					log_debug("nobody subscribe, %d", g_rtsp_serv->device[i]->deviceid);
+//					log_debug("nobody subscribe, %d", g_rtsp_serv->device[i]->deviceid);
 					g_rtsp_serv->device[i]->time_count += 5;
 					if(g_rtsp_serv->device[i]->time_count >= MAX_SERVICE_WAIT_TIME)
 					{

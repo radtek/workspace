@@ -9,6 +9,8 @@
 // =====================================================================================
 
 #include "threadpool.h"
+#include <set>
+using namespace std;
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +26,9 @@ int task_size;
 int task_head;
 int task_tail;
 bool threadpool_shutdown;
+// 任务ID
+pthread_mutex_t set_lock;
+set<unsigned int> setTaskIds;
 
 t_threadpool_task *create_threadpool_task()
 {
@@ -31,6 +36,35 @@ t_threadpool_task *create_threadpool_task()
 	task->callback = NULL;
 	task->arg = NULL;
 	task->release = false;
+	task->taskId = 0;
+}
+
+void free_threadpool_task(t_threadpool_task *&task)
+{
+	if(task != NULL)
+	{
+		if(task->release)
+		{
+			free(task->arg);
+			task->arg = NULL;
+		}
+		free(task);
+		task = NULL;
+	}
+}
+
+void remove_task_id(int taskId)
+{
+	if(taskId != 0)
+	{
+		pthread_mutex_lock(&set_lock);
+		set<unsigned int>::iterator iter = setTaskIds.find(taskId);
+		if(iter != setTaskIds.end())
+		{
+			setTaskIds.erase(iter);
+		}
+		pthread_mutex_unlock(&set_lock);
+	}
 }
 
 void threadpool_start(int num, int max_task_num)
@@ -38,6 +72,7 @@ void threadpool_start(int num, int max_task_num)
 	// 线程池参数信息初始化
 	pthread_mutex_init(&threadpool_lock, NULL);
 	pthread_cond_init(&threadpool_cond, NULL);
+	pthread_mutex_init(&set_lock, NULL);
 	task_list = (t_threadpool_task**)malloc(max_task_num * sizeof(t_threadpool_task*));
 	memset(task_list, 0, max_task_num * sizeof(t_threadpool_task*));
 	pid = (pthread_t*)malloc(num * sizeof(pthread_t));
@@ -116,6 +151,47 @@ int threadpool_add_task(t_threadpool_task* &task)
 	}
 }
 
+int threadpool_add_task(t_threadpool_task* &task, int taskId)
+{
+	if(task == NULL)
+	{
+		return -1;
+	}
+
+	if(taskId != 0)
+	{
+		pthread_mutex_lock(&set_lock);
+		if(setTaskIds.find(taskId) != setTaskIds.end())
+		{
+			pthread_mutex_unlock(&set_lock);
+			free_threadpool_task(task);
+			return 1;
+		}
+		pthread_mutex_unlock(&set_lock);
+	}
+
+	task->taskId = taskId;
+	pthread_mutex_lock(&set_lock);
+	setTaskIds.insert(taskId);
+	pthread_mutex_unlock(&set_lock);
+
+	pthread_mutex_lock(&threadpool_lock);
+	if(task_total > task_size)
+	{
+		task_list[task_tail] = task;
+		task_tail = (task_tail + 1) % task_total;
+		task_size += 1;
+		pthread_mutex_unlock(&threadpool_lock);
+		pthread_cond_signal(&threadpool_cond);
+		return 0;
+	}
+	else
+	{
+		pthread_mutex_unlock(&threadpool_lock);
+		return -1;
+	}
+}
+
 void *threadpool_func(void *arg)
 {
 	while(true)
@@ -139,16 +215,8 @@ void *threadpool_func(void *arg)
 		pthread_mutex_unlock(&threadpool_lock);
 
 		task->callback(task->arg);
-		if(task != NULL)
-		{
-			if(task->release)
-			{
-				free(task->arg);
-				task->arg = NULL;
-			}
-			free(task);
-			task = NULL;
-		}
+		remove_task_id(task->taskId);
+		free_threadpool_task(task);
 	}
 	return NULL;
 }
