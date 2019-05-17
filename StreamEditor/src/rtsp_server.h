@@ -20,7 +20,7 @@
 // 开启端口
 int create_server_socket(int port);
 // 返回对象
-tcp_server_info *create_tcp_server(char *localip, char *port);
+tcp_server_info *create_tcp_server(char *localip, char *netip, char *port);
 // 释放内存
 void free_tcp_server(tcp_server_info* &info);
 // rtsp应答

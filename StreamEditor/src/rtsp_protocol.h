@@ -36,6 +36,8 @@ typedef struct
 	char nonce[64];
 	char realm[32];
 	char ssrc[2][16];
+	int seq[2];
+	int rtptime[2];
 	char ipaddr[16];
 	int cmd_seq;
 	bool secret;
@@ -82,7 +84,7 @@ int rtsp_parse_cmd_play(t_rtsp_info *info, char *buffer, int buflen);
 int rtsp_parse_cmd_teardown(t_rtsp_info *info, char *buffer, int buflen);
 
 // 定制解析接口,返回cmd_seq
-int rtsp_parse_cmd_options(char *url, char *buffer, int &deviceid);
+int rtsp_parse_cmd_options(char *local_url, char *url, char *buffer, int &deviceid);
 
 #endif
 

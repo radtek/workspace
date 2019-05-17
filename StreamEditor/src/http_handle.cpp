@@ -139,9 +139,9 @@ bool handle_describe(std::string url, std::string body, mg_connection *c, OnRspC
 						break;
 					}
 					sleep(1);
-				}while(i <= 3);
+				}while(i <= 10);
 
-				if(bRet)
+				if(!bRet)
 				{
 					rtsp_url = player->vir_rtsp_info->rtsp_url;
 					log_debug("生成设备虚拟rtsp地址: %s", rtsp_url.c_str());

@@ -467,18 +467,46 @@ int rtsp_parse_reply_play(t_rtsp_info *info, char *buffer, int buflen)
 				ret = -1;
 			}
 		}
-		if(strNodes != NULL)
+
+		free_part_string(strNodes);
+		for(int i = 1; i < nLineCount; i++)
 		{
-			delete [] strNodes;
-			strNodes = NULL;
+			if(strncmp(strLines[i].c_str(), "RTP-Info:", 9) == 0)
+			{
+				strNodes = get_part_string(strLines[i], " ", nNodeCount);
+				int nPartCount = 0;
+				string *strParts = get_part_string(strNodes[1], ",", nPartCount);
+				for(int j = 0; j < nPartCount; j++)
+				{
+					int nArgCount = 0;
+					string *args = get_part_string(strParts[j], ";", nArgCount);
+					if(strncmp(args[0].c_str(), "url=", 4) != 0)
+					{
+						free_part_string(args);
+						continue;
+					}
+
+					for(int k = 1; k < nArgCount; k++)
+					{
+						if(strncmp(args[k].c_str(), "seq=", 4) == 0)
+						{
+							string seq = args[k].substr(4, args[k].length() - 4);
+							info->seq[j] = atoi(seq.c_str());
+						}
+						else if(strncmp(args[k].c_str(), "rtptime=", 8) == 0)
+						{
+							string rtptime = args[k].substr(8, args[k].length() - 8);
+							info->rtptime[j] = atoi(rtptime.c_str());
+						}
+					}
+					free_part_string(args);
+				}
+				free_part_string(strParts);
+				free_part_string(strNodes);
+			}
 		}
 	}while(0);
-
-	if(strLines != NULL)
-	{
-		delete [] strLines;
-		strLines = NULL;
-	}
+	free_part_string(strLines);
 	return ret;
 }
 
@@ -596,10 +624,11 @@ int rtsp_reply_play(t_rtsp_info *info, char *buffer, int cmd_seq, int &over)
 	sprintf(buffer, "RTSP/1.0 200 OK\r\n"
 					"CSeq: %d\r\n"
 					"Session:       %s\r\n"
-					"RTP-Info: url=%s/trackID=1;seq=32174;rtptime=296066432,"
-							  "url=%s/trackID=2;seq=64348;rtptime=26317072\r\n"
+					"RTP-Info: url=%s/trackID=1;seq=%d;rtptime=%d,"
+							  "url=%s/trackID=2;seq=%d;rtptime=%d\r\n"
 					"\r\n",
-					cmd_seq, info->session, info->rtsp_url, info->rtsp_url);
+					cmd_seq, info->session, info->rtsp_url, info->seq[0], info->rtptime[0], 
+					info->rtsp_url, info->seq[1], info->rtptime[1]);
 	over = 0;
 	return strlen(buffer);
 }
@@ -885,7 +914,7 @@ int rtsp_parse_cmd_teardown(t_rtsp_info *info, char *buffer, int buflen)
 }
 
 /* ***************************************************************************************************************** */
-int rtsp_parse_cmd_options(char *url, char *buffer, int &deviceid)
+int rtsp_parse_cmd_options(char *local_url, char *url, char *buffer, int &deviceid)
 {
 	int ret = 0;
 	string message = buffer;
@@ -906,6 +935,17 @@ int rtsp_parse_cmd_options(char *url, char *buffer, int &deviceid)
 			{
 				string strId = strNodes[1].substr(strlen(url), strNodes[1].length() - strlen(url));
 				deviceid = atoi(strId.c_str());
+			}
+			else if(strncmp(strNodes[1].c_str(), local_url, strlen(local_url)) == 0)
+			{
+				string strId = strNodes[1].substr(strlen(local_url), strNodes[1].length() - strlen(local_url));
+				deviceid = atoi(strId.c_str());
+			}
+			else
+			{
+				log_debug("错误的rtsp地址 %s", url);
+				free_part_string(strNodes);
+				break;
 			}
 			free_part_string(strNodes);
 		}

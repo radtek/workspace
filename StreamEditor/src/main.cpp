@@ -21,7 +21,7 @@ using namespace std;
 #include "http_handle.h"
 #include "websocket_server.h"
 
-#define THREAD_NUM (10)
+#define THREAD_NUM (20)
 #define THREAD_TASK_NUM (1024)
 
 map<unsigned int, t_device_video_play*> g_mapDeviceVideoPlay;
@@ -36,11 +36,13 @@ void *thread_http(void *arg);
 int main(int argc, char *argv[])
 {
 	char localhost[16] = { 0 };
+	char networkhost[16] = { 0 };
 	char http_port[8] = { 0 };
 	char rtsp_port[8] = { 0 };
 	char ws_port[8] = { 0 };
 	char dev_count[8] = { 0 };
 	GetConfigureString("local.ipaddr", localhost, 16, "127.0.0.1", CONFFILE);
+	GetConfigureString("network.ipaddr", networkhost, 16, "127.0.0.1", CONFFILE);
 	GetConfigureString("http.service.port", http_port, 8, "8000", CONFFILE);
 	GetConfigureString("rtsp.service.port", rtsp_port, 8, "8001", CONFFILE);
 	GetConfigureString("ws.service.port", ws_port, 8, "8002", CONFFILE);
@@ -59,7 +61,7 @@ int main(int argc, char *argv[])
 	}
 
 	// 启动rtsp服务
-	g_rtsp_serv = create_tcp_server(localhost, rtsp_port);
+	g_rtsp_serv = create_tcp_server(localhost, networkhost, rtsp_port);
 	if(g_rtsp_serv == NULL)
 	{
 		log_debug("rtsp服务端口 %s 启动失败", rtsp_port);
@@ -103,9 +105,9 @@ int main(int argc, char *argv[])
 	pthread_create(&tid, NULL, thread_http, (void*)http_port);
 
 	// 开启websocket
+	log_debug("websocket port[%s] start", ws_port);
 	int port = atoi(ws_port);
 	g_ws_serv.start(port);
-	log_debug("websocket port[%s] start success.", ws_port);
 
 	return EXIT_SUCCESS;
 }
@@ -113,6 +115,7 @@ int main(int argc, char *argv[])
 void *thread_http(void *arg)
 {
 	char* port = (char*)arg;
+	log_info(log_queue, "HTTP服务端口开启，端口号 %s.", port);
 	// 开启http端口
 	std::string httpport = port;
 	auto http_server = std::shared_ptr<HttpServer>(new HttpServer);

@@ -62,7 +62,7 @@ int create_server_socket(int port)
 	return sockfd;
 }
 
-tcp_server_info *create_tcp_server(char *localip, char *port)
+tcp_server_info *create_tcp_server(char *localip, char *netip, char *port)
 {
 	int serv_port = atoi(port);
 	int sockfd = create_server_socket(serv_port);
@@ -79,7 +79,8 @@ tcp_server_info *create_tcp_server(char *localip, char *port)
 		info->device[i]->stop = true;
 		info->device[i]->ready_stop = false;
 	}
-	memcpy(info->ipaddr, localip, 16);
+	memcpy(info->ipaddr, netip, 16);
+	memcpy(info->localip, localip, 16);
 	info->sockfd = sockfd;
 	info->port = serv_port;
 	info->device_count = 0;
@@ -88,6 +89,8 @@ tcp_server_info *create_tcp_server(char *localip, char *port)
 	info->maxfd = sockfd;
 	memset(info->vir_url, 0, 128);
 	sprintf(info->vir_url, "rtsp://%s:%d/video/h264/", info->ipaddr, info->port);
+	memset(info->local_url, 0, 128);
+	sprintf(info->local_url, "rtsp://%s:%d/video/h264/", info->localip, info->port);
 	return info;
 }
 
@@ -114,11 +117,11 @@ void rtsp_response(void *arg)
 	int seq = 0;
 	int over = -1;
 
-	seq = rtsp_parse_cmd_options(g_rtsp_serv->vir_url, buffer, deviceid);
+	seq = rtsp_parse_cmd_options(g_rtsp_serv->local_url, g_rtsp_serv->vir_url, buffer, deviceid);
 	if(seq == -1)
 	{
-		log_debug("错误的RTSP连接, 连接断开.");
-		log_info(log_queue, "错误的RTSP连接, 连接断开.");
+		log_debug("错误的RTSP连接, 连接断开, %s.", buffer);
+		log_info(log_queue, "错误的RTSP连接, 连接断开, %s.", buffer);
 		close(clnt->sockfd);
 		return;
 	}
@@ -126,9 +129,9 @@ void rtsp_response(void *arg)
 	t_device_video_play *player = video_task_get(deviceid);
 	if(player == NULL)
 	{
-		close(clnt->sockfd);
 		log_debug("所请求的设备ID不存在, %d", deviceid);
 		log_info(log_queue, "所请求的设备ID不存在, %d", deviceid);
+		close(clnt->sockfd);
 		return;
 	}
 	else

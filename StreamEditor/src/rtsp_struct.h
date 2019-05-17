@@ -49,9 +49,14 @@ typedef struct
 
 typedef struct
 {
+	// 局域网访问地址
+	char local_url[128];
+	// 互联网访问地址
 	char vir_url[128];
-	// 本地IP
+	// 互联网IP
 	char ipaddr[16];
+	// 本地IP
+	char localip[16];
 	// 开辟的端口号
 	int port;
 	// 服务端套接字

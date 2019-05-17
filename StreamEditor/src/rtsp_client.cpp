@@ -202,6 +202,11 @@ bool rtsp_request(t_device_video_play *player)
 		memcpy(player->vir_rtsp_info->password, player->dev_rtsp_info->password, 32);
 		memcpy(player->vir_rtsp_info->nonce, player->dev_rtsp_info->nonce, 64);
 		memcpy(player->vir_rtsp_info->realm, player->dev_rtsp_info->realm, 64);
+		for(int i = 0; i < 2; i++)
+		{
+			player->vir_rtsp_info->seq[i] = player->dev_rtsp_info->seq[i];
+			player->vir_rtsp_info->rtptime[i] = player->dev_rtsp_info->rtptime[i];
+		}
 		for(int i = 0; i < 3; i++)
 		{
 			player->vir_rtsp_info->info_count[i] = player->dev_rtsp_info->info_count[i];
