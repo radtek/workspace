@@ -103,8 +103,26 @@ LogFile *LogFile::GetInstince()
 	return m_pInstince;
 }
 
-LogFile& LogFile::WriteLog(const char* format, ...)
+LogFile& LogFile::Logging(EnumLogType type,const char* format, ...)
 {
+	string strLogType = "";
+	if(type == emLogTypeInfo)
+	{
+		strLogType = ":[Info] ";
+	}
+	else if(type == emLogTypeWarn)
+	{
+		strLogType = ":[Warn] ";
+	}
+	else if(type == emLogTypeError)
+	{
+		strLogType = ":[Error] ";
+	}
+	else
+	{
+		strLogType = ": ";
+	}
+
 	if(time(NULL) - m_lasttime > 86400) 
 	{ 
 #ifdef __GNUC__
@@ -124,7 +142,7 @@ LogFile& LogFile::WriteLog(const char* format, ...)
 	EnterCriticalSection(&m_csLock);
 #endif
 	
-	if (!m_osFile || !CheckFile())
+	if (!m_osFile)
 	{
 		OpenFile();
 	}
@@ -142,106 +160,10 @@ LogFile& LogFile::WriteLog(const char* format, ...)
 	va_end(ap);
 
 #ifdef __GNUC__
-	m_osFile << GetSystemTime() << " :[Info]" << buffer << endl;
+	m_osFile << GetSystemTime() << strLogType << buffer << endl;
 	pthread_mutex_unlock(&m_mutexLock);
 #else
-	m_osFile << GetSystemTime() << " :[Info]" << buffer << endl;
-	LeaveCriticalSection(&m_csLock);
-#endif
-	return (*this);
-}
-
-LogFile& LogFile::WriteWarn(const char* format, ...)
-{
-	if(time(NULL) - m_lasttime > 86400) 
-	{ 
-#ifdef __GNUC__
-		pthread_mutex_lock(&m_mutexLock); 
-		OpenFile(); 
-		pthread_mutex_unlock(&m_mutexLock); 
-#else
-		EnterCriticalSection(&m_csLock); 
-		OpenFile(); 
-		LeaveCriticalSection(&m_csLock); 
-#endif 
-	}
-
-#ifdef __GNUC__
-	pthread_mutex_lock(&m_mutexLock);
-#else
-	EnterCriticalSection(&m_csLock);
-#endif
-	
-	if (!m_osFile || !CheckFile())
-	{
-		OpenFile();
-	}
-
-	static char buffer[LOG_SIZE];
-	memset(buffer, 0, LOG_SIZE);
-	va_list ap;
-	va_start(ap, format);
-
-#ifdef __GNUC__
-	vsprintf(buffer, format, ap);
-#else
-	vsprintf_s(buffer, LOG_SIZE, format, ap);		// windows safe function
-#endif
-	va_end(ap);
-
-#ifdef __GNUC__
-	m_osFile << GetSystemTime() << " :[Warning]" << buffer << endl;
-	pthread_mutex_unlock(&m_mutexLock);
-#else
-	m_osFile << GetSystemTime() << " :[Warning]" << buffer << endl;
-	LeaveCriticalSection(&m_csLock);
-#endif
-	return (*this);
-}
-
-LogFile& LogFile::WriteErr(const char* format, ...)
-{
-	if(time(NULL) - m_lasttime > 86400) 
-	{ 
-#ifdef __GNUC__
-		pthread_mutex_lock(&m_mutexLock); 
-		OpenFile(); 
-		pthread_mutex_unlock(&m_mutexLock); 
-#else
-		EnterCriticalSection(&m_csLock); 
-		OpenFile(); 
-		LeaveCriticalSection(&m_csLock); 
-#endif 
-	}
-
-#ifdef __GNUC__
-	pthread_mutex_lock(&m_mutexLock);
-#else
-	EnterCriticalSection(&m_csLock);
-#endif
-	
-	if (!m_osFile || !CheckFile())
-	{
-		OpenFile();
-	}
-
-	static char buffer[LOG_SIZE];
-	memset(buffer, 0, LOG_SIZE);
-	va_list ap;
-	va_start(ap, format);
-
-#ifdef __GNUC__
-	vsprintf(buffer, format, ap);
-#else
-	vsprintf_s(buffer, LOG_SIZE, format, ap);		// windows safe function
-#endif
-	va_end(ap);
-
-#ifdef __GNUC__
-	m_osFile << GetSystemTime() << " :[Error]" << buffer << endl;
-	pthread_mutex_unlock(&m_mutexLock);
-#else
-	m_osFile << GetSystemTime() << " :[Error]" << buffer << endl;
+	m_osFile << GetSystemTime() << strLogType << buffer << endl;
 	LeaveCriticalSection(&m_csLock);
 #endif
 	return (*this);
@@ -268,12 +190,14 @@ bool LogFile::OpenFile()
 {
 	bool result = true;
 #ifdef __GNUC__
-	if (opendir(m_pLogPath) == NULL)
+	DIR *dir = opendir(m_pLogPath);
+	if (dir == NULL)
 		mkdir(m_pLogPath, S_IRWXU);
+	closedir(dir);
 #else	
 	if (_access(m_pLogPath, 0) == -1) 
 	{
-		if (!CreateDirectory(m_pLogPath, NULL)) 
+		if (!CreateDirectoryA(m_pLogPath, NULL)) 
 		{
 			result = false;
 		}
@@ -288,7 +212,7 @@ bool LogFile::OpenFile()
 	localtime_r(&timer, &local);
 	sprintf(m_pFileName, "%0.4d%0.2d%0.2d", local.tm_year + 1900, local.tm_mon + 1, local.tm_mday);
 #else
-	struct tm * local = new tm;
+	struct tm local;
 	localtime_s(&local, &timer);
 	sprintf_s(m_pFileName, NAME_LEN, "%0.4d%0.2d%0.2d", local.tm_year + 1900, local.tm_mon + 1, local.tm_mday);
 #endif

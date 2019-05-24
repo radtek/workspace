@@ -314,7 +314,7 @@ void *byte_array_process_start(void *arg)
 		}
 
 		int channel_id = buffer[1];
-		if(channel_id == 0)
+//		if(channel_id == 0)
 		{
 			// 推送rtp数据
 			if(g_rtsp_serv->device[player->serv_pos]->clnt_count != 0)
@@ -326,34 +326,37 @@ void *byte_array_process_start(void *arg)
 				}
 			}
 
-			// websocket推送数据
-			if(g_ws_serv.is_subscribe(deviceid))
+			if(channel_id == 0)
 			{
-				int ret = parse_nalu(nalu, buffer + 4, length - 4);
-				if(nalu->finish)
+				// websocket推送数据
+				if(g_ws_serv.is_subscribe(deviceid))
 				{
-					g_ws_serv.send_video_stream(deviceid, nalu->data, nalu->size);
-					nalu->size = 0;
-					nalu->finish = false;
-				}
-
-				if(ret > 0)
-				{
-					while(ret < length - 4)
+					int ret = parse_nalu(nalu, buffer + 4, length - 4);
+					if(nalu->finish)
 					{
-						int n = parse_nalu_stap(nalu, buffer + ret + 4);
 						g_ws_serv.send_video_stream(deviceid, nalu->data, nalu->size);
-						ret += n;
-
 						nalu->size = 0;
 						nalu->finish = false;
 					}
+
+					if(ret > 0)
+					{
+						while(ret < length - 4)
+						{
+							int n = parse_nalu_stap(nalu, buffer + ret + 4);
+							g_ws_serv.send_video_stream(deviceid, nalu->data, nalu->size);
+							ret += n;
+	
+							nalu->size = 0;
+							nalu->finish = false;
+						}
+					}
 				}
-			}
-			else
-			{
-				nalu->size = 0;
-				nalu->finish = false;
+				else
+				{
+					nalu->size = 0;
+					nalu->finish = false;
+				}
 			}
 		}
 	}

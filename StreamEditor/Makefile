@@ -4,7 +4,7 @@ include_dir = -I /usr/include/oracle/11.2/client64 -I ./src/include
 libs = -lpthread -levent_core -levent_extra -levent -lociei -lclntsh -lnnz11 -lboost_system
 objs = main.o logfile.o functions.o rtsp_protocol.o rtsp_client.o md5.o rtsp_server.o http_handle.o http_server.o mongoose.o bytearray.o otlcontrol.o json_value.o \
 		json_reader.o json_writer.o rtsp_task.o threadpool.o rtsp_util.o websocket_server.o rtp_protocol.o
-exe = stream
+exe = StreamService
 c_flags = -g -std=c++11
 
 
@@ -57,6 +57,6 @@ websocket_server.o:
 clean:
 	rm -f *.o 
 clean-all:
-	rm -f *.o stream
+	rm -f *.o StreamService
 rebuild:
 	rm -f *.o & make

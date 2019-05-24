@@ -44,6 +44,7 @@ int TcpClient::connect_serv()
 	int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if(sockfd == -1)
 	{
+		close(sockfd);
 		g_logs->WriteWarn("socket() error, %s", strerror(errno));
 		pthread_mutex_unlock(&m_mutexLock);
 		return -2;
@@ -59,6 +60,7 @@ int TcpClient::connect_serv()
 	if(connect(sockfd, (sockaddr*)&serv_addr, socklen) == -1)
 	{
 		pthread_mutex_unlock(&m_mutexLock);
+		close(sockfd);
 		return -3;
 	}
 	m_bConn = true;

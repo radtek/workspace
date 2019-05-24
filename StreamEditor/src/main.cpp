@@ -11,6 +11,7 @@
 #include <map>
 #include <memory>
 using namespace std;
+#include <signal.h>
 
 #include "threadpool.h"
 #include "functions.h"
@@ -31,22 +32,35 @@ tcp_server_info *g_rtsp_serv;
 int g_max_device_count;
 WebSocketServer g_ws_serv;
 
+void signal_handler(int signum);
 void *thread_http(void *arg);
 
 int main(int argc, char *argv[])
 {
+	struct sigaction sa;
+	sa.sa_handler = signal_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sigaction(SIGABRT, &sa, NULL);
+	sigaction(SIGFPE, &sa, NULL);
+	sigaction(SIGSEGV, &sa, NULL);
+	sigaction(SIGPIPE, &sa, NULL);
+
+
 	char localhost[16] = { 0 };
 	char networkhost[16] = { 0 };
 	char http_port[8] = { 0 };
 	char rtsp_port[8] = { 0 };
 	char ws_port[8] = { 0 };
 	char dev_count[8] = { 0 };
+	char channel_type[8] = { 0 };
 	GetConfigureString("local.ipaddr", localhost, 16, "127.0.0.1", CONFFILE);
 	GetConfigureString("network.ipaddr", networkhost, 16, "127.0.0.1", CONFFILE);
 	GetConfigureString("http.service.port", http_port, 8, "8000", CONFFILE);
 	GetConfigureString("rtsp.service.port", rtsp_port, 8, "8001", CONFFILE);
 	GetConfigureString("ws.service.port", ws_port, 8, "8002", CONFFILE);
 	GetConfigureString("rtsp.device.count", dev_count, 8, "20", CONFFILE);
+	GetConfigureString("rtsp.device.channel", channel_type, 8, "sub", CONFFILE);
 	g_max_device_count = atoi(dev_count);
 
 	// 启动日志线程
@@ -82,12 +96,18 @@ int main(int argc, char *argv[])
 					g_rtsp_serv->ipaddr, g_rtsp_serv->port, iter->second->device_info->deviceid);
 			sprintf(iter->second->vir_rtsp_info->video_url, "%s/trackID=1", iter->second->vir_rtsp_info->rtsp_url);
 			sprintf(iter->second->vir_rtsp_info->audio_url, "%s/trackID=2", iter->second->vir_rtsp_info->rtsp_url);
-			// 主码流
-//			sprintf(iter->second->dev_rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/main/av_stream", 
-//					iter->second->device_info->ipaddr, iter->second->device_info->rtspport);
-			// 子码流
-			sprintf(iter->second->dev_rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/sub/av_stream", 
-					iter->second->device_info->ipaddr, iter->second->device_info->rtspport);
+			if(strcmp(channel_type, "main") == 0)
+			{
+				// 主码流
+				sprintf(iter->second->dev_rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/main/av_stream", 
+						iter->second->device_info->ipaddr, iter->second->device_info->rtspport);
+			}
+			else
+			{
+				// 子码流
+				sprintf(iter->second->dev_rtsp_info->rtsp_url, "rtsp://%s:%d/h264/ch1/sub/av_stream", 
+						iter->second->device_info->ipaddr, iter->second->device_info->rtspport);
+			}
 			memcpy(iter->second->dev_rtsp_info->username, iter->second->device_info->username, 32);
 			memcpy(iter->second->dev_rtsp_info->password, iter->second->device_info->password, 32);
 			iter++;
@@ -110,6 +130,38 @@ int main(int argc, char *argv[])
 	g_ws_serv.start(port);
 
 	return EXIT_SUCCESS;
+}
+
+void signal_handler(int signum)
+{
+	if(signum == 1)
+	{
+		log_debug("SIGHUP");
+	}
+	else if(signum == 2)
+	{
+		log_debug("SIGINT");
+	}
+	else if(signum == 3)
+	{
+		log_debug("SIGQUIT");
+	}
+	else if(signum == 6)
+	{
+		log_debug("SIGABRT");
+	}
+	else if(signum == 8)
+	{
+		log_debug("SIGFPE");
+	}
+	else if(signum == 11)
+	{
+		log_debug("SIGSEGV");
+	}
+	else if(signum == 13)
+	{
+		log_debug("SIGPIPE");
+	}
 }
 
 void *thread_http(void *arg)

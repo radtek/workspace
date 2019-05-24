@@ -8,28 +8,31 @@
 #ifndef _SINGLETON_LOG_H_H_H
 #define _SINGLETON_LOG_H_H_H
 
+#include "defines.h"
 #include "functions.h"
-#include <iostream>
-using namespace std;
-#include <stdlib.h>
-#include <stdint.h>
+
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include <stdarg.h>
-
-#ifdef __GNUC__
-#include <dirent.h>
 #include <unistd.h>
-#include <pthread.h>
-#else
-#include <io.h>
-#include <Windows.h>
-#endif
+#include <dirent.h>
 
 #define LOG_SIZE (1024 * 10)
 #define PATH_LEN 224
 #define NAME_LEN 32
 #define LogInfo (*g_logs)
+
+#define WriteLog(format, ...) Logging(emLogTypeInfo, format, ##__VA_ARGS__)
+#define WriteWarn(format, ...) Logging(emLogTypeWarn, format, ##__VA_ARGS__)
+#define WriteErr(format, ...) Logging(emLogTypeError, format, ##__VA_ARGS__)
+
+enum EnumLogType{
+	emLogTypeInfo = 1,
+	emLogTypeWarn = 2,
+	emLogTypeError = 3
+};
 
 class LogFile
 {
@@ -40,11 +43,11 @@ public:
 	{
 #ifdef __GNUC__
 		pthread_mutex_lock(&m_mutexLock);	
-		if (!m_osFile.is_open() || !CheckFile())
+		if (!m_osFile.is_open())
 		{
 			OpenFile();
 		}
-		m_osFile << GetSystemTime() << " :" << str << endl;
+		m_osFile << GetSystemTime() << ": " << str << endl;
 		pthread_mutex_unlock(&m_mutexLock);	
 #else
 		EnterCriticalSection(&m_csLock);
@@ -52,14 +55,12 @@ public:
 		{
 			OpenFile();
 		}
-		m_osFile << GetSystemTime() << " :" << str << endl;
+		m_osFile << GetSystemTime() << ": " << str << endl;
 		LeaveCriticalSection(&m_csLock);
 #endif
 		return (*this);
 	};
-	LogFile& WriteLog(const char* format, ...);
-	LogFile& WriteWarn(const char* format, ...);
-	LogFile& WriteErr(const char* format, ...);
+	LogFile& Logging(EnumLogType type,const char* format, ...);
 	LogFile info()
 	{
 		return *m_pInstince;
